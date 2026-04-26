@@ -6,7 +6,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUk
 
 // API Key de Claude - se lee de variable de entorno de Vercel
 const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY || '';
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 const GORUTY = {
   primary: '#5b4bff',
