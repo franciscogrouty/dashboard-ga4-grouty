@@ -17,22 +17,16 @@ const GORUTY = {
   danger: '#ef4444',
 };
 
+// =============================================
+// LOGO GROUTY (usa imagen del repo /public/grouty-logo.jpg)
+// =============================================
 const GorutyLogo = ({ size = 40 }) => (
-  <div
-    className="rounded-xl flex items-center justify-center shadow-lg shadow-violet-300"
-    style={{
-      width: size,
-      height: size,
-      background: `linear-gradient(135deg, ${GORUTY.primary} 0%, ${GORUTY.tertiary} 100%)`,
-    }}
-  >
-    <svg viewBox="0 0 100 100" style={{ width: size * 0.6, height: size * 0.6 }}>
-      <path
-        d="M 30 20 L 75 20 L 75 80 L 58 80 L 58 37 L 45 37 Q 30 37 30 55 L 30 75 L 15 75 L 15 55 Q 15 20 30 20 Z"
-        fill="#f5f0ff"
-      />
-    </svg>
-  </div>
+  <img
+    src="/grouty-logo.jpg"
+    alt="Grouty"
+    className="rounded-xl shadow-lg shadow-violet-300 object-cover"
+    style={{ width: size, height: size }}
+  />
 );
 
 // =============================================
@@ -90,7 +84,7 @@ function LoginScreen({ onLogin }) {
             <div className="flex justify-center mb-4">
               <GorutyLogo size={64} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-1">Dashboard GA4</h1>
+            <h1 className="text-2xl font-bold text-slate-900 mb-1">Dashboard Grouty</h1>
             <p className="text-sm text-slate-500">Powered by Grouty</p>
           </div>
 
@@ -576,7 +570,7 @@ function Dashboard({ session, onLogout }) {
             <GorutyLogo size={52} />
             <div>
               <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                <h1 className="text-2xl font-bold text-slate-900">Dashboard GA4</h1>
+                <h1 className="text-2xl font-bold text-slate-900">Dashboard Grouty</h1>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>Grouty</span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{currentClient?.emoji} {currentClient?.nombre}</span>
                 {liveData && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">✓ Datos en vivo</span>}
@@ -901,7 +895,7 @@ function Dashboard({ session, onLogout }) {
 
         <div className="flex items-center justify-center gap-2 text-xs text-slate-400 pt-6 border-t border-violet-100">
           <GorutyLogo size={20} />
-          <span>Dashboard GA4 · {currentClient?.nombre} · Powered by Grouty · 🔐 Acceso autenticado</span>
+          <span>Dashboard Grouty · {currentClient?.nombre} · Powered by Grouty · 🔐 Acceso autenticado</span>
         </div>
       </div>
     </div>
