@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
-import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff } from 'lucide-react';
+import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle } from 'lucide-react';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUkLrgfuo1k-RuTPc7VtVrlenEv58LTMAP07l-CxPpgcCqtVw/exec';
 
@@ -194,14 +194,25 @@ function Dashboard({ session, onLogout }) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
-  const [liveData, setLiveData] = useState(null);
   const [refreshError, setRefreshError] = useState(null);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
 
+  // ============================================================
+  // 🎯 CACHÉ DE DATOS POR CLIENTE
+  // Estructura: { 'hotel-termas': {data, lastUpdate}, 'aldea-nativa': {...} }
+  // ============================================================
+  const [clientCache, setClientCache] = useState({});
+
+  // Datos del cliente activo (vienen del caché)
+  const liveData = clientCache[activeClient]?.data || null;
+  const lastUpdate = clientCache[activeClient]?.lastUpdate || null;
+
   const currentClient = session.clientes.find(c => c.id === activeClient) || session.clientes[0];
 
+  // ============================================================
+  // 🔄 FUNCIÓN DE ACTUALIZACIÓN — solo se ejecuta al apretar el botón
+  // ============================================================
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setRefreshError(null);
@@ -222,8 +233,15 @@ function Dashboard({ session, onLogout }) {
 
       if (data.error) throw new Error(data.error);
 
-      setLiveData(data);
-      setLastUpdate(new Date());
+      // Guardar en caché del cliente actual
+      setClientCache(prev => ({
+        ...prev,
+        [activeClient]: {
+          data: data,
+          lastUpdate: new Date()
+        }
+      }));
+
       setRefreshKey(k => k + 1);
       setRefreshSuccess(true);
       setTimeout(() => setRefreshSuccess(false), 3000);
@@ -235,10 +253,20 @@ function Dashboard({ session, onLogout }) {
     }
   };
 
+  // ============================================================
+  // 🎯 CARGA INICIAL — Solo se ejecuta UNA vez al loguearse
+  // (carga los datos del primer cliente automáticamente)
+  // ============================================================
   useEffect(() => {
-    handleRefresh();
+    if (!clientCache[activeClient]) {
+      handleRefresh();
+    }
     // eslint-disable-next-line
-  }, [activeClient]);
+  }, []);
+
+  // ⚠️ NOTA: Removimos el useEffect que se ejecutaba al cambiar de cliente.
+  // Ahora cuando cambias de cliente, se muestra el caché (si existe) o
+  // un mensaje invitando a apretar "Actualizar".
 
   const [sections, setSections] = useState({
     acquisition: true,
@@ -321,11 +349,10 @@ function Dashboard({ session, onLogout }) {
   // 🎯 HELPER: filtro de fechas universal para TODAS las tablas
   // ============================================================
   const dateFilter = useMemo(() => {
-    // Set de fechas válidas según el rango seleccionado
     const fechasValidas = new Set(trendData.map(d => d.fechaCompleta).filter(Boolean));
 
     return (fechaRaw) => {
-      if (!fechaRaw) return true; // si la fila no tiene fecha, no la filtramos
+      if (!fechaRaw) return true;
       const fecha = String(fechaRaw).slice(0, 10);
       if (dateRange === 'all') return true;
       return fechasValidas.has(fecha);
@@ -543,6 +570,11 @@ function Dashboard({ session, onLogout }) {
     labelStyle: { color: '#64748b', fontWeight: 600 },
   };
 
+  // ============================================================
+  // 🎯 ESTADO: ¿el cliente activo tiene datos cargados?
+  // ============================================================
+  const hasDataForActiveClient = !!liveData;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-purple-50 text-slate-800 p-6">
       <div className="max-w-[1400px] mx-auto">
@@ -576,7 +608,11 @@ function Dashboard({ session, onLogout }) {
                 {liveData && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">✓ Datos en vivo</span>}
               </div>
               <p className="text-sm text-slate-500 flex items-center gap-2">
-                <span>Última actualización: {lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
+                {lastUpdate ? (
+                  <span>Última actualización: {lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
+                ) : (
+                  <span className="text-amber-600">Sin datos cargados — pulsa Actualizar</span>
+                )}
               </p>
             </div>
           </div>
@@ -599,13 +635,17 @@ function Dashboard({ session, onLogout }) {
                     <div className="p-2 border-b border-violet-100 bg-violet-50/50">
                       <span className="text-xs font-semibold text-slate-600 px-2">CLIENTES ({session.clientes.length})</span>
                     </div>
-                    {session.clientes.map(client => (
-                      <div key={client.id} onClick={() => { setActiveClient(client.id); setShowClientDropdown(false); }} className={`flex items-center gap-2 px-3 py-2.5 hover:bg-violet-50 cursor-pointer ${activeClient === client.id ? 'bg-violet-50' : ''}`}>
-                        <span className="text-lg">{client.emoji}</span>
-                        <span className="text-sm font-medium text-slate-800 flex-1">{client.nombre}</span>
-                        {activeClient === client.id && <Check className="w-4 h-4" style={{ color: GORUTY.primary }} />}
-                      </div>
-                    ))}
+                    {session.clientes.map(client => {
+                      const hasCache = !!clientCache[client.id]?.data;
+                      return (
+                        <div key={client.id} onClick={() => { setActiveClient(client.id); setShowClientDropdown(false); }} className={`flex items-center gap-2 px-3 py-2.5 hover:bg-violet-50 cursor-pointer ${activeClient === client.id ? 'bg-violet-50' : ''}`}>
+                          <span className="text-lg">{client.emoji}</span>
+                          <span className="text-sm font-medium text-slate-800 flex-1">{client.nombre}</span>
+                          {hasCache && <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Cargado</span>}
+                          {activeClient === client.id && <Check className="w-4 h-4" style={{ color: GORUTY.primary }} />}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -637,266 +677,309 @@ function Dashboard({ session, onLogout }) {
           </div>
         </div>
 
-        {/* FILTROS */}
-        <div className="bg-white border border-violet-100 rounded-xl p-4 mb-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <Filter className="w-4 h-4" style={{ color: GORUTY.primary }} />
-            <span className="text-sm font-semibold text-slate-800">Filtros</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block font-medium">📅 Rango de fechas</label>
-              <select value={dateRange} onChange={(e) => { setDateRange(e.target.value); setShowCustomDate(e.target.value === 'custom'); }} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800">
-                <option value="all">Todo el período</option>
-                <option value="7d">Últimos 7 días</option>
-                <option value="14d">Últimos 14 días</option>
-                <option value="28d">Últimos 28 días</option>
-                <option value="custom">Personalizado</option>
-              </select>
-            </div>
-          </div>
-          {showCustomDate && (
-            <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-violet-100">
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block font-medium">Desde</label>
-                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block font-medium">Hasta</label>
-                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
+        {/* 🎯 PANTALLA "SIN DATOS" — cuando el cliente activo no tiene datos cargados */}
+        {!hasDataForActiveClient && !isRefreshing && (
+          <div className="bg-white border-2 border-dashed border-violet-200 rounded-2xl p-12 text-center shadow-sm">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: `${GORUTY.primary}15` }}>
+                <AlertCircle className="w-8 h-8" style={{ color: GORUTY.primary }} />
               </div>
             </div>
-          )}
-          <div className="mt-3 text-xs text-slate-500">
-            Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos
-            {dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}
+            <h2 className="text-xl font-bold text-slate-900 mb-2">
+              Sin datos cargados para {currentClient?.emoji} {currentClient?.nombre}
+            </h2>
+            <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+              Para ver el dashboard de este cliente, pulsa el botón <strong>Actualizar</strong> y se cargarán sus datos de Google Analytics.
+            </p>
+            <button
+              onClick={handleRefresh}
+              className="px-6 py-3 rounded-lg text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg mx-auto"
+              style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Cargar datos de {currentClient?.nombre}
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-          <KpiCard icon={Users} label="Usuarios Activos" value={fmt(kpis.usuarios)} accentColor={GORUTY.primary} trend={8.4} />
-          <KpiCard icon={Users} label="Usuarios Nuevos" value={fmt(kpis.usuariosNuevos)} accentColor={GORUTY.secondary} trend={6.2} />
-          <KpiCard icon={MousePointer} label="Sesiones" value={fmt(kpis.sesiones)} accentColor={GORUTY.tertiary} trend={9.1} />
-          <KpiCard icon={Eye} label="Vistas" value={fmt(kpis.vistas)} accentColor={GORUTY.accent} />
-          <KpiCard icon={Target} label="Conversiones" value={fmt(kpis.conversiones)} accentColor={GORUTY.deepPurple} />
-          <KpiCard icon={DollarSign} label="Valor Compras" value={fmtMoney(kpis.valorPurchase)} accentColor={GORUTY.primary} />
-        </div>
+        {/* 🎯 LOADER — cuando está cargando */}
+        {!hasDataForActiveClient && isRefreshing && (
+          <div className="bg-white border border-violet-100 rounded-2xl p-12 text-center shadow-sm">
+            <div className="flex justify-center mb-4">
+              <RefreshCw className="w-12 h-12 animate-spin" style={{ color: GORUTY.primary }} />
+            </div>
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">Cargando datos...</h2>
+            <p className="text-sm text-slate-500">
+              Estamos obteniendo los datos de {currentClient?.emoji} {currentClient?.nombre}
+            </p>
+          </div>
+        )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-          <KpiCard icon={TrendingUp} label="Tasa Engagement" value={`${kpis.tasaEngagement}%`} accentColor={GORUTY.primary} />
-          <KpiCard icon={Activity} label="Tasa Rebote" value={`${kpis.tasaRebote}%`} accentColor={GORUTY.danger} />
-          <KpiCard icon={Clock} label="Duración Sesión" value={fmtTime(kpis.duracionPromedio)} accentColor={GORUTY.secondary} />
-          <KpiCard icon={Clock} label="Dur. Engagement" value={fmtTime(kpis.duracionEngagement)} accentColor={GORUTY.tertiary} />
-          <KpiCard icon={Activity} label="Sesiones Comp." value={fmt(kpis.sesionesEng)} accentColor={GORUTY.accent} />
-          <KpiCard icon={Target} label="Tasa Conv." value={`${kpis.tasaConversionSesion}%`} accentColor={GORUTY.deepPurple} />
-        </div>
+        {/* 🎯 CONTENIDO DEL DASHBOARD — solo si hay datos */}
+        {hasDataForActiveClient && (
+          <>
+            {/* FILTROS */}
+            <div className="bg-white border border-violet-100 rounded-xl p-4 mb-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Filter className="w-4 h-4" style={{ color: GORUTY.primary }} />
+                <span className="text-sm font-semibold text-slate-800">Filtros</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block font-medium">📅 Rango de fechas</label>
+                  <select value={dateRange} onChange={(e) => { setDateRange(e.target.value); setShowCustomDate(e.target.value === 'custom'); }} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800">
+                    <option value="all">Todo el período</option>
+                    <option value="7d">Últimos 7 días</option>
+                    <option value="14d">Últimos 14 días</option>
+                    <option value="28d">Últimos 28 días</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                </div>
+              </div>
+              {showCustomDate && (
+                <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-violet-100">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block font-medium">Desde</label>
+                    <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block font-medium">Hasta</label>
+                    <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
+                  </div>
+                </div>
+              )}
+              <div className="mt-3 text-xs text-slate-500">
+                Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos
+                {dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}
+              </div>
+            </div>
 
-        <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={trendData}>
-              <defs>
-                <linearGradient id="gradUsuarios" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={GORUTY.primary} stopOpacity={0.35} /><stop offset="95%" stopColor={GORUTY.primary} stopOpacity={0} /></linearGradient>
-                <linearGradient id="gradSesiones" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={GORUTY.tertiary} stopOpacity={0.35} /><stop offset="95%" stopColor={GORUTY.tertiary} stopOpacity={0} /></linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-              <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 11 }} />
-              <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 11 }} />
-              <YAxis yAxisId="right" orientation="right" stroke={GORUTY.accent} style={{ fontSize: 11 }} />
-              <Tooltip {...tooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area yAxisId="left" type="monotone" dataKey="usuarios" stroke={GORUTY.primary} fill="url(#gradUsuarios)" strokeWidth={2.5} name="Usuarios" />
-              <Area yAxisId="left" type="monotone" dataKey="sesiones" stroke={GORUTY.tertiary} fill="url(#gradSesiones)" strokeWidth={2.5} name="Sesiones" />
-              <Bar yAxisId="right" dataKey="conversiones" fill={GORUTY.accent} name="Conversiones" radius={[4, 4, 0, 0]} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Panel>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+              <KpiCard icon={Users} label="Usuarios Activos" value={fmt(kpis.usuarios)} accentColor={GORUTY.primary} trend={8.4} />
+              <KpiCard icon={Users} label="Usuarios Nuevos" value={fmt(kpis.usuariosNuevos)} accentColor={GORUTY.secondary} trend={6.2} />
+              <KpiCard icon={MousePointer} label="Sesiones" value={fmt(kpis.sesiones)} accentColor={GORUTY.tertiary} trend={9.1} />
+              <KpiCard icon={Eye} label="Vistas" value={fmt(kpis.vistas)} accentColor={GORUTY.accent} />
+              <KpiCard icon={Target} label="Conversiones" value={fmt(kpis.conversiones)} accentColor={GORUTY.deepPurple} />
+              <KpiCard icon={DollarSign} label="Valor Compras" value={fmtMoney(kpis.valorPurchase)} accentColor={GORUTY.primary} />
+            </div>
 
-        <Panel title="📊 Tasa de Engagement vs Tasa de Rebote (%)" className="mb-6">
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-              <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 11 }} />
-              <YAxis stroke="#94a3b8" style={{ fontSize: 11 }} />
-              <Tooltip {...tooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="tasaEngagement" stroke={GORUTY.primary} strokeWidth={2.5} name="Tasa Engagement" dot={false} />
-              <Line type="monotone" dataKey="tasaRebote" stroke={GORUTY.danger} strokeWidth={2.5} name="Tasa Rebote" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Panel>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+              <KpiCard icon={TrendingUp} label="Tasa Engagement" value={`${kpis.tasaEngagement}%`} accentColor={GORUTY.primary} />
+              <KpiCard icon={Activity} label="Tasa Rebote" value={`${kpis.tasaRebote}%`} accentColor={GORUTY.danger} />
+              <KpiCard icon={Clock} label="Duración Sesión" value={fmtTime(kpis.duracionPromedio)} accentColor={GORUTY.secondary} />
+              <KpiCard icon={Clock} label="Dur. Engagement" value={fmtTime(kpis.duracionEngagement)} accentColor={GORUTY.tertiary} />
+              <KpiCard icon={Activity} label="Sesiones Comp." value={fmt(kpis.sesionesEng)} accentColor={GORUTY.accent} />
+              <KpiCard icon={Target} label="Tasa Conv." value={`${kpis.tasaConversionSesion}%`} accentColor={GORUTY.deepPurple} />
+            </div>
 
-        <SectionHeader title="Adquisición" subtitle="Canales y fuentes" icon={TrendingUp} sectionKey="acquisition" />
-        {sections.acquisition && canalesData.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            <Panel title="Usuarios por Canal">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={canalesData} layout="vertical" margin={{ left: 10 }}>
+            <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
+              <ResponsiveContainer width="100%" height={320}>
+                <ComposedChart data={trendData}>
+                  <defs>
+                    <linearGradient id="gradUsuarios" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={GORUTY.primary} stopOpacity={0.35} /><stop offset="95%" stopColor={GORUTY.primary} stopOpacity={0} /></linearGradient>
+                    <linearGradient id="gradSesiones" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={GORUTY.tertiary} stopOpacity={0.35} /><stop offset="95%" stopColor={GORUTY.tertiary} stopOpacity={0} /></linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-                  <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="nombre" stroke="#64748b" style={{ fontSize: 11 }} width={110} />
+                  <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                  <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                  <YAxis yAxisId="right" orientation="right" stroke={GORUTY.accent} style={{ fontSize: 11 }} />
                   <Tooltip {...tooltipStyle} />
-                  <Bar dataKey="usuarios" radius={[0, 4, 4, 0]}>
-                    {canalesData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Bar>
-                </BarChart>
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Area yAxisId="left" type="monotone" dataKey="usuarios" stroke={GORUTY.primary} fill="url(#gradUsuarios)" strokeWidth={2.5} name="Usuarios" />
+                  <Area yAxisId="left" type="monotone" dataKey="sesiones" stroke={GORUTY.tertiary} fill="url(#gradSesiones)" strokeWidth={2.5} name="Sesiones" />
+                  <Bar yAxisId="right" dataKey="conversiones" fill={GORUTY.accent} name="Conversiones" radius={[4, 4, 0, 0]} />
+                </ComposedChart>
               </ResponsiveContainer>
             </Panel>
-            <Panel title="Top Fuente / Medio">
-              <div className="overflow-x-auto max-h-80 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-white">
-                    <tr className="text-left text-slate-500 border-b border-violet-100">
-                      <th className="py-2 px-3 font-semibold">Source / Medium</th>
-                      <th className="py-2 px-3 text-right font-semibold">Sesiones</th>
-                      <th className="py-2 px-3 text-right font-semibold">Conv.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sourceMediumData.map((row, i) => (
-                      <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                        <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.fuente}</td>
-                        <td className="py-2 px-3 text-right text-slate-700">{fmt(row.sesiones)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-emerald-600">{row.conv}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+
+            <Panel title="📊 Tasa de Engagement vs Tasa de Rebote (%)" className="mb-6">
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                  <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                  <YAxis stroke="#94a3b8" style={{ fontSize: 11 }} />
+                  <Tooltip {...tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line type="monotone" dataKey="tasaEngagement" stroke={GORUTY.primary} strokeWidth={2.5} name="Tasa Engagement" dot={false} />
+                  <Line type="monotone" dataKey="tasaRebote" stroke={GORUTY.danger} strokeWidth={2.5} name="Tasa Rebote" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
             </Panel>
-          </div>
-        )}
 
-        <SectionHeader title="Audiencia" subtitle="Ubicación y dispositivos" icon={Globe} sectionKey="audience" />
-        {sections.audience && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-            {paisesData.length > 0 && (
-              <Panel title="Usuarios por País" className="lg:col-span-2">
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={paisesData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-                    <XAxis dataKey="pais" stroke="#64748b" style={{ fontSize: 10 }} angle={-15} textAnchor="end" height={70} />
-                    <YAxis stroke="#94a3b8" style={{ fontSize: 11 }} />
-                    <Tooltip {...tooltipStyle} />
-                    <Bar dataKey="usuarios" fill={GORUTY.primary} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Panel>
+            <SectionHeader title="Adquisición" subtitle="Canales y fuentes" icon={TrendingUp} sectionKey="acquisition" />
+            {sections.acquisition && canalesData.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <Panel title="Usuarios por Canal">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={canalesData} layout="vertical" margin={{ left: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                      <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                      <YAxis type="category" dataKey="nombre" stroke="#64748b" style={{ fontSize: 11 }} width={110} />
+                      <Tooltip {...tooltipStyle} />
+                      <Bar dataKey="usuarios" radius={[0, 4, 4, 0]}>
+                        {canalesData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Panel>
+                <Panel title="Top Fuente / Medio">
+                  <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-white">
+                        <tr className="text-left text-slate-500 border-b border-violet-100">
+                          <th className="py-2 px-3 font-semibold">Source / Medium</th>
+                          <th className="py-2 px-3 text-right font-semibold">Sesiones</th>
+                          <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sourceMediumData.map((row, i) => (
+                          <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                            <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.fuente}</td>
+                            <td className="py-2 px-3 text-right text-slate-700">{fmt(row.sesiones)}</td>
+                            <td className="py-2 px-3 text-right font-semibold text-emerald-600">{row.conv}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </div>
             )}
-            {dispositivosData.length > 0 && (
-              <Panel title="Dispositivos">
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie data={dispositivosData} dataKey="usuarios" nameKey="tipo" cx="50%" cy="50%" outerRadius={80} label={(e) => e.tipo}>
-                      {dispositivosData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                    </Pie>
-                    <Tooltip {...tooltipStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Panel>
-            )}
-            {ciudadesData.length > 0 && (
-              <Panel title="Top Ciudades">
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={ciudadesData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-                    <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="ciudad" stroke="#64748b" style={{ fontSize: 11 }} width={100} />
-                    <Tooltip {...tooltipStyle} />
-                    <Bar dataKey="usuarios" fill={GORUTY.secondary} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Panel>
-            )}
-            {osData.length > 0 && (
-              <Panel title="Sistema Operativo">
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={osData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-                    <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="os" stroke="#64748b" style={{ fontSize: 11 }} width={90} />
-                    <Tooltip {...tooltipStyle} />
-                    <Bar dataKey="usuarios" fill={GORUTY.tertiary} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Panel>
-            )}
-            {navegadoresData.length > 0 && (
-              <Panel title="Navegadores">
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie data={navegadoresData} dataKey="usuarios" nameKey="navegador" cx="50%" cy="50%" outerRadius={80} label={(e) => `${e.navegador} (${e.porcentaje}%)`} style={{ fontSize: 9 }}>
-                      {navegadoresData.map((_, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}
-                    </Pie>
-                    <Tooltip {...tooltipStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Panel>
-            )}
-          </div>
-        )}
 
-        <SectionHeader title="Comportamiento" subtitle="Páginas más vistas" icon={Eye} sectionKey="behavior" />
-        {sections.behavior && paginasData.length > 0 && (
-          <Panel title="Páginas Más Vistas" className="mb-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-500 border-b border-violet-100">
-                    <th className="py-2 px-3 font-semibold">Path</th>
-                    <th className="py-2 px-3 font-semibold">Título</th>
-                    <th className="py-2 px-3 text-right font-semibold">Vistas</th>
-                    <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginasData.map((row, i) => (
-                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.path}</td>
-                      <td className="py-2 px-3 text-slate-700 text-xs">{row.titulo}</td>
-                      <td className="py-2 px-3 text-right text-slate-700">{fmt(row.vistas)}</td>
-                      <td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <SectionHeader title="Audiencia" subtitle="Ubicación y dispositivos" icon={Globe} sectionKey="audience" />
+            {sections.audience && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                {paisesData.length > 0 && (
+                  <Panel title="Usuarios por País" className="lg:col-span-2">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={paisesData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                        <XAxis dataKey="pais" stroke="#64748b" style={{ fontSize: 10 }} angle={-15} textAnchor="end" height={70} />
+                        <YAxis stroke="#94a3b8" style={{ fontSize: 11 }} />
+                        <Tooltip {...tooltipStyle} />
+                        <Bar dataKey="usuarios" fill={GORUTY.primary} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Panel>
+                )}
+                {dispositivosData.length > 0 && (
+                  <Panel title="Dispositivos">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie data={dispositivosData} dataKey="usuarios" nameKey="tipo" cx="50%" cy="50%" outerRadius={80} label={(e) => e.tipo}>
+                          {dispositivosData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip {...tooltipStyle} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </Panel>
+                )}
+                {ciudadesData.length > 0 && (
+                  <Panel title="Top Ciudades">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={ciudadesData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                        <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                        <YAxis type="category" dataKey="ciudad" stroke="#64748b" style={{ fontSize: 11 }} width={100} />
+                        <Tooltip {...tooltipStyle} />
+                        <Bar dataKey="usuarios" fill={GORUTY.secondary} radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Panel>
+                )}
+                {osData.length > 0 && (
+                  <Panel title="Sistema Operativo">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={osData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                        <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                        <YAxis type="category" dataKey="os" stroke="#64748b" style={{ fontSize: 11 }} width={90} />
+                        <Tooltip {...tooltipStyle} />
+                        <Bar dataKey="usuarios" fill={GORUTY.tertiary} radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Panel>
+                )}
+                {navegadoresData.length > 0 && (
+                  <Panel title="Navegadores">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie data={navegadoresData} dataKey="usuarios" nameKey="navegador" cx="50%" cy="50%" outerRadius={80} label={(e) => `${e.navegador} (${e.porcentaje}%)`} style={{ fontSize: 9 }}>
+                          {navegadoresData.map((_, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}
+                        </Pie>
+                        <Tooltip {...tooltipStyle} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </Panel>
+                )}
+              </div>
+            )}
+
+            <SectionHeader title="Comportamiento" subtitle="Páginas más vistas" icon={Eye} sectionKey="behavior" />
+            {sections.behavior && paginasData.length > 0 && (
+              <Panel title="Páginas Más Vistas" className="mb-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-500 border-b border-violet-100">
+                        <th className="py-2 px-3 font-semibold">Path</th>
+                        <th className="py-2 px-3 font-semibold">Título</th>
+                        <th className="py-2 px-3 text-right font-semibold">Vistas</th>
+                        <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginasData.map((row, i) => (
+                        <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                          <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.path}</td>
+                          <td className="py-2 px-3 text-slate-700 text-xs">{row.titulo}</td>
+                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.vistas)}</td>
+                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            )}
+
+            <SectionHeader title="Eventos" subtitle="Conteo de eventos" icon={MousePointer} sectionKey="events" />
+            {sections.events && eventosData.length > 0 && (
+              <Panel title="Top Eventos" className="mb-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-500 border-b border-violet-100">
+                        <th className="py-2 px-3 font-semibold">Evento</th>
+                        <th className="py-2 px-3 text-right font-semibold">Conteo</th>
+                        <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eventosData.map((row, i) => (
+                        <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                          <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.accent }}>
+                            {row.evento}
+                            {row.esConversion && <span className="ml-2 text-emerald-600 font-bold">✓</span>}
+                          </td>
+                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.conteo)}</td>
+                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            )}
+
+            <div className="flex items-center justify-center gap-2 text-xs text-slate-400 pt-6 border-t border-violet-100">
+              <GorutyLogo size={20} />
+              <span>Dashboard Grouty · {currentClient?.nombre} · Powered by Grouty · 🔐 Acceso autenticado</span>
             </div>
-          </Panel>
+          </>
         )}
-
-        <SectionHeader title="Eventos" subtitle="Conteo de eventos" icon={MousePointer} sectionKey="events" />
-        {sections.events && eventosData.length > 0 && (
-          <Panel title="Top Eventos" className="mb-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-500 border-b border-violet-100">
-                    <th className="py-2 px-3 font-semibold">Evento</th>
-                    <th className="py-2 px-3 text-right font-semibold">Conteo</th>
-                    <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {eventosData.map((row, i) => (
-                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.accent }}>
-                        {row.evento}
-                        {row.esConversion && <span className="ml-2 text-emerald-600 font-bold">✓</span>}
-                      </td>
-                      <td className="py-2 px-3 text-right text-slate-700">{fmt(row.conteo)}</td>
-                      <td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
-        )}
-
-        <div className="flex items-center justify-center gap-2 text-xs text-slate-400 pt-6 border-t border-violet-100">
-          <GorutyLogo size={20} />
-          <span>Dashboard Grouty · {currentClient?.nombre} · Powered by Grouty · 🔐 Acceso autenticado</span>
-        </div>
       </div>
     </div>
   );
