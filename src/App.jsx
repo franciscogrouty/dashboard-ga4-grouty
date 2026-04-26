@@ -216,7 +216,7 @@ function Dashboard({ session, onLogout }) {
     try {
       const url = `${API_URL}?token=${encodeURIComponent(session.token)}&cliente=${activeClient}`;
       const response = await fetch(url);
-      
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
 
@@ -264,8 +264,10 @@ function Dashboard({ session, onLogout }) {
     if (!liveData?.resumenDiario || liveData.resumenDiario.length === 0) return [];
     return liveData.resumenDiario.map(row => {
       const fecha = String(row['Fecha'] || '').slice(5, 10);
+      const fechaCompleta = String(row['Fecha'] || '').slice(0, 10);
       return {
         fecha,
+        fechaCompleta,
         usuarios: Number(row['Usuarios Activos']) || 0,
         usuariosNuevos: Number(row['Usuarios Nuevos']) || 0,
         sesiones: Number(row['Sesiones']) || 0,
@@ -313,14 +315,28 @@ function Dashboard({ session, onLogout }) {
     if (dateRange === '28d') return data.slice(-28);
     if (dateRange === 'custom') {
       return data.filter(d => {
-        const fullDate = `2026-${d.fecha}`;
-        return fullDate >= customStart && fullDate <= customEnd;
+        return d.fechaCompleta >= customStart && d.fechaCompleta <= customEnd;
       });
     }
     return data;
   }, [dateRange, customStart, customEnd, trendDataConConversiones]);
 
   const daysCount = trendData.length;
+
+  // ============================================================
+  // 🎯 HELPER: filtro de fechas universal para TODAS las tablas
+  // ============================================================
+  const dateFilter = useMemo(() => {
+    // Set de fechas válidas según el rango seleccionado
+    const fechasValidas = new Set(trendData.map(d => d.fechaCompleta).filter(Boolean));
+
+    return (fechaRaw) => {
+      if (!fechaRaw) return true; // si la fila no tiene fecha, no la filtramos
+      const fecha = String(fechaRaw).slice(0, 10);
+      if (dateRange === 'all') return true;
+      return fechasValidas.has(fecha);
+    };
+  }, [dateRange, trendData]);
 
   const kpis = useMemo(() => {
     const totals = trendData.reduce((acc, d) => ({
@@ -356,116 +372,134 @@ function Dashboard({ session, onLogout }) {
   const canalesData = useMemo(() => {
     if (!liveData?.fuentesTrafico) return [];
     const map = {};
-    liveData.fuentesTrafico.forEach(row => {
-      const canal = row['Canal'] || 'Otro';
-      if (!map[canal]) map[canal] = { nombre: canal, usuarios: 0, sesiones: 0, conversiones: 0 };
-      map[canal].usuarios += Number(row['Usuarios']) || 0;
-      map[canal].sesiones += Number(row['Sesiones']) || 0;
-      map[canal].conversiones += Number(row['Conversiones']) || 0;
-    });
+    liveData.fuentesTrafico
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const canal = row['Canal'] || 'Otro';
+        if (!map[canal]) map[canal] = { nombre: canal, usuarios: 0, sesiones: 0, conversiones: 0 };
+        map[canal].usuarios += Number(row['Usuarios']) || 0;
+        map[canal].sesiones += Number(row['Sesiones']) || 0;
+        map[canal].conversiones += Number(row['Conversiones']) || 0;
+      });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 9).map((c, i) => ({ ...c, color: chartColors[i % chartColors.length] }));
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const sourceMediumData = useMemo(() => {
     if (!liveData?.fuentesTrafico) return [];
     const map = {};
-    liveData.fuentesTrafico.forEach(row => {
-      const fuente = row['Source/Medium'] || 'unknown';
-      if (!map[fuente]) map[fuente] = { fuente, sesiones: 0, usuarios: 0, conv: 0 };
-      map[fuente].sesiones += Number(row['Sesiones']) || 0;
-      map[fuente].usuarios += Number(row['Usuarios']) || 0;
-      map[fuente].conv += Number(row['Conversiones']) || 0;
-    });
+    liveData.fuentesTrafico
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const fuente = row['Source/Medium'] || 'unknown';
+        if (!map[fuente]) map[fuente] = { fuente, sesiones: 0, usuarios: 0, conv: 0 };
+        map[fuente].sesiones += Number(row['Sesiones']) || 0;
+        map[fuente].usuarios += Number(row['Usuarios']) || 0;
+        map[fuente].conv += Number(row['Conversiones']) || 0;
+      });
     return Object.values(map).sort((a, b) => b.sesiones - a.sesiones).slice(0, 12);
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const paisesData = useMemo(() => {
     if (!liveData?.geografia) return [];
     const map = {};
-    liveData.geografia.forEach(row => {
-      const pais = row['País'] || 'Otros';
-      if (!map[pais]) map[pais] = { pais, usuarios: 0, sesiones: 0 };
-      map[pais].usuarios += Number(row['Usuarios']) || 0;
-      map[pais].sesiones += Number(row['Sesiones']) || 0;
-    });
+    liveData.geografia
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const pais = row['País'] || 'Otros';
+        if (!map[pais]) map[pais] = { pais, usuarios: 0, sesiones: 0 };
+        map[pais].usuarios += Number(row['Usuarios']) || 0;
+        map[pais].sesiones += Number(row['Sesiones']) || 0;
+      });
     const total = Object.values(map).reduce((s, p) => s + p.usuarios, 0);
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 10).map(p => ({ ...p, porcentaje: total ? ((p.usuarios / total) * 100).toFixed(1) : 0 }));
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const ciudadesData = useMemo(() => {
     if (!liveData?.geografia) return [];
     const map = {};
-    liveData.geografia.forEach(row => {
-      const ciudad = row['Ciudad'] || '(not set)';
-      if (ciudad === '(not set)' || !ciudad) return;
-      if (!map[ciudad]) map[ciudad] = { ciudad, usuarios: 0 };
-      map[ciudad].usuarios += Number(row['Usuarios']) || 0;
-    });
+    liveData.geografia
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const ciudad = row['Ciudad'] || '(not set)';
+        if (ciudad === '(not set)' || !ciudad) return;
+        if (!map[ciudad]) map[ciudad] = { ciudad, usuarios: 0 };
+        map[ciudad].usuarios += Number(row['Usuarios']) || 0;
+      });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 8);
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const dispositivosData = useMemo(() => {
     if (!liveData?.dispositivos) return [];
     const map = {};
-    liveData.dispositivos.forEach(row => {
-      const tipoRaw = row['Categoría Dispositivo'] || 'unknown';
-      const tipo = tipoRaw.charAt(0).toUpperCase() + tipoRaw.slice(1);
-      if (!map[tipo]) map[tipo] = { tipo, usuarios: 0, sesiones: 0 };
-      map[tipo].usuarios += Number(row['Usuarios']) || 0;
-      map[tipo].sesiones += Number(row['Sesiones']) || 0;
-    });
+    liveData.dispositivos
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const tipoRaw = row['Categoría Dispositivo'] || 'unknown';
+        const tipo = tipoRaw.charAt(0).toUpperCase() + tipoRaw.slice(1);
+        if (!map[tipo]) map[tipo] = { tipo, usuarios: 0, sesiones: 0 };
+        map[tipo].usuarios += Number(row['Usuarios']) || 0;
+        map[tipo].sesiones += Number(row['Sesiones']) || 0;
+      });
     const colors = { Mobile: GORUTY.primary, Desktop: GORUTY.tertiary, Tablet: GORUTY.light };
     return Object.values(map).map(d => ({ ...d, color: colors[d.tipo] || GORUTY.secondary }));
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const osData = useMemo(() => {
     if (!liveData?.dispositivos) return [];
     const map = {};
-    liveData.dispositivos.forEach(row => {
-      const os = row['Sistema Operativo'] || 'unknown';
-      if (!map[os]) map[os] = { os, usuarios: 0 };
-      map[os].usuarios += Number(row['Usuarios']) || 0;
-    });
+    liveData.dispositivos
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const os = row['Sistema Operativo'] || 'unknown';
+        if (!map[os]) map[os] = { os, usuarios: 0 };
+        map[os].usuarios += Number(row['Usuarios']) || 0;
+      });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 5);
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const navegadoresData = useMemo(() => {
     if (!liveData?.dispositivos) return [];
     const map = {};
     let total = 0;
-    liveData.dispositivos.forEach(row => {
-      const nav = row['Navegador'] || 'unknown';
-      if (!map[nav]) map[nav] = { navegador: nav, usuarios: 0 };
-      const u = Number(row['Usuarios']) || 0;
-      map[nav].usuarios += u;
-      total += u;
-    });
+    liveData.dispositivos
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const nav = row['Navegador'] || 'unknown';
+        if (!map[nav]) map[nav] = { navegador: nav, usuarios: 0 };
+        const u = Number(row['Usuarios']) || 0;
+        map[nav].usuarios += u;
+        total += u;
+      });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 6).map(n => ({ ...n, porcentaje: total ? ((n.usuarios / total) * 100).toFixed(1) : 0 }));
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const paginasData = useMemo(() => {
     if (!liveData?.paginas) return [];
     const map = {};
-    liveData.paginas.forEach(row => {
-      const path = row['Path sin Query String'] || row['Página (Path)'] || '/';
-      if (!map[path]) map[path] = { path, titulo: row['Título'] || '', vistas: 0, usuarios: 0 };
-      map[path].vistas += Number(row['Vistas']) || 0;
-      map[path].usuarios += Number(row['Usuarios']) || 0;
-    });
+    liveData.paginas
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const path = row['Path sin Query String'] || row['Página (Path)'] || '/';
+        if (!map[path]) map[path] = { path, titulo: row['Título'] || '', vistas: 0, usuarios: 0 };
+        map[path].vistas += Number(row['Vistas']) || 0;
+        map[path].usuarios += Number(row['Usuarios']) || 0;
+      });
     return Object.values(map).sort((a, b) => b.vistas - a.vistas).slice(0, 13);
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const eventosData = useMemo(() => {
     if (!liveData?.eventos) return [];
     const map = {};
-    liveData.eventos.forEach(row => {
-      const ev = row['Nombre del Evento'] || 'unknown';
-      if (!map[ev]) map[ev] = { evento: ev, conteo: 0, usuarios: 0, esConversion: row['¿Es Conversión?'] === 'TRUE' || row['¿Es Conversión?'] === true };
-      map[ev].conteo += Number(row['Conversiones']) || 0;
-      map[ev].usuarios += Number(row['Usuarios']) || 0;
-    });
+    liveData.eventos
+      .filter(row => dateFilter(row['Fecha']))
+      .forEach(row => {
+        const ev = row['Nombre del Evento'] || 'unknown';
+        if (!map[ev]) map[ev] = { evento: ev, conteo: 0, usuarios: 0, esConversion: row['¿Es Conversión?'] === 'TRUE' || row['¿Es Conversión?'] === true };
+        map[ev].conteo += Number(row['Conversiones']) || 0;
+        map[ev].usuarios += Number(row['Usuarios']) || 0;
+      });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 12);
-  }, [liveData]);
+  }, [liveData, dateFilter]);
 
   const fmt = (n) => Number(n).toLocaleString('es-CL');
   const fmtTime = (s) => `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -641,6 +675,7 @@ function Dashboard({ session, onLogout }) {
           )}
           <div className="mt-3 text-xs text-slate-500">
             Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos
+            {dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}
           </div>
         </div>
 
