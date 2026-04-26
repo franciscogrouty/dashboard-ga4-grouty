@@ -1,8 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
-import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle } from 'lucide-react';
+import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Sparkles, Bot, Zap } from 'lucide-react';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUkLrgfuo1k-RuTPc7VtVrlenEv58LTMAP07l-CxPpgcCqtVw/exec';
+
+// API Key de Claude - se lee de variable de entorno de Vercel
+const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY || '';
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 
 const GORUTY = {
   primary: '#5b4bff',
@@ -18,7 +22,7 @@ const GORUTY = {
 };
 
 // =============================================
-// LOGO GROUTY (usa imagen del repo /public/grouty-logo.jpg)
+// LOGO GROUTY
 // =============================================
 const GorutyLogo = ({ size = 40 }) => (
   <img
@@ -45,17 +49,13 @@ function LoginScreen({ onLogin }) {
       setError('Ingresa usuario y contraseña');
       return;
     }
-
     setLoading(true);
     setError('');
-
     try {
       const url = `${API_URL}?action=login&user=${encodeURIComponent(usuario)}&pass=${encodeURIComponent(pass)}`;
       const response = await fetch(url);
       const data = await response.json();
-
       if (data.ok) {
-        // Guardar sesión
         localStorage.setItem('grouty_session', JSON.stringify({
           token: data.token,
           usuario: data.usuario,
@@ -87,98 +87,362 @@ function LoginScreen({ onLogin }) {
             <h1 className="text-2xl font-bold text-slate-900 mb-1">Dashboard Grouty</h1>
             <p className="text-sm text-slate-500">Powered by Grouty</p>
           </div>
-
           <div className="p-8">
             <h2 className="text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2">
               <Lock className="w-5 h-5" style={{ color: GORUTY.primary }} />
               Iniciar sesión
             </h2>
             <p className="text-sm text-slate-500 mb-6">Ingresa tus credenciales para acceder</p>
-
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-slate-500 mb-1.5 block font-semibold uppercase tracking-wide">Usuario</label>
                 <div className="relative">
                   <UserIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={usuario}
-                    onChange={(e) => setUsuario(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                    placeholder="Tu usuario"
-                    className="w-full bg-violet-50/50 border border-violet-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800"
-                    autoFocus
-                  />
+                  <input type="text" value={usuario} onChange={(e) => setUsuario(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder="Tu usuario" className="w-full bg-violet-50/50 border border-violet-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" autoFocus />
                 </div>
               </div>
-
               <div>
                 <label className="text-xs text-slate-500 mb-1.5 block font-semibold uppercase tracking-wide">Contraseña</label>
                 <div className="relative">
                   <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type={showPass ? 'text' : 'password'}
-                    value={pass}
-                    onChange={(e) => setPass(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                    placeholder="••••••••"
-                    className="w-full bg-violet-50/50 border border-violet-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
+                  <input type={showPass ? 'text' : 'password'} value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder="••••••••" className="w-full bg-violet-50/50 border border-violet-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
+                  <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                     {showPass ? <EyeOff className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-
               {error && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
                   <X className="w-4 h-4 flex-shrink-0" />
                   {error}
                 </div>
               )}
-
-              <button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg disabled:opacity-60"
-                style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Validando...
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-4 h-4" />
-                    Ingresar
-                  </>
-                )}
+              <button onClick={handleSubmit} disabled={loading} className="w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
+                {loading ? (<><RefreshCw className="w-4 h-4 animate-spin" />Validando...</>) : (<><Lock className="w-4 h-4" />Ingresar</>)}
               </button>
             </div>
-
             <div className="mt-6 pt-6 border-t border-violet-100 text-center">
-              <p className="text-xs text-slate-400">
-                ¿Problemas para acceder? Contacta a tu administrador
-              </p>
+              <p className="text-xs text-slate-400">¿Problemas para acceder? Contacta a tu administrador</p>
             </div>
           </div>
         </div>
-
-        <div className="text-center mt-4 text-xs text-slate-400">
-          🔐 Acceso seguro · Datos confidenciales
-        </div>
+        <div className="text-center mt-4 text-xs text-slate-400">🔐 Acceso seguro · Datos confidenciales</div>
       </div>
     </div>
   );
 }
 
 // =============================================
-// DASHBOARD PRINCIPAL (después de login)
+// 🤖 COMPONENTE: PANEL DE ANÁLISIS IA
+// =============================================
+function AIAnalysisPanel({ liveData, kpis, currentClient, dateRange, daysCount }) {
+  const [analysis, setAnalysis] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [lastAnalysis, setLastAnalysis] = useState(null);
+
+  const generateAnalysis = async () => {
+    if (!CLAUDE_API_KEY) {
+      setError('La API key de Claude no está configurada. Contacta al administrador.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setAnalysis('');
+
+    // Preparar resumen compacto de los datos para enviar a Claude
+    const dataSummary = {
+      cliente: currentClient?.nombre,
+      periodo: dateRange === 'all' ? 'Todo el período' : `Últimos ${daysCount} días`,
+      kpis: {
+        usuariosActivos: kpis.usuarios,
+        usuariosNuevos: kpis.usuariosNuevos,
+        sesiones: kpis.sesiones,
+        vistas: kpis.vistas,
+        conversiones: kpis.conversiones,
+        valorCompras: kpis.valorPurchase,
+        tasaEngagement: kpis.tasaEngagement,
+        tasaRebote: kpis.tasaRebote,
+        duracionPromedio: kpis.duracionPromedio,
+        sesionesPorUsuario: kpis.sesionesPorUsuario,
+        vistasPorSesion: kpis.vistasPorSesion,
+        tasaConversion: kpis.tasaConversionSesion
+      },
+      // Top 5 canales de tráfico
+      topCanales: (liveData?.fuentesTrafico || []).slice(0, 30).reduce((acc, row) => {
+        const canal = row['Canal'] || 'Otro';
+        const usuarios = Number(row['Usuarios']) || 0;
+        const existing = acc.find(c => c.canal === canal);
+        if (existing) existing.usuarios += usuarios;
+        else acc.push({ canal, usuarios });
+        return acc;
+      }, []).sort((a, b) => b.usuarios - a.usuarios).slice(0, 5),
+      // Top 5 países
+      topPaises: (liveData?.geografia || []).slice(0, 30).reduce((acc, row) => {
+        const pais = row['País'] || 'Otros';
+        const usuarios = Number(row['Usuarios']) || 0;
+        const existing = acc.find(c => c.pais === pais);
+        if (existing) existing.usuarios += usuarios;
+        else acc.push({ pais, usuarios });
+        return acc;
+      }, []).sort((a, b) => b.usuarios - a.usuarios).slice(0, 5),
+      // Top 5 páginas
+      topPaginas: (liveData?.paginas || []).slice(0, 50).reduce((acc, row) => {
+        const path = row['Path sin Query String'] || row['Página (Path)'] || '/';
+        const vistas = Number(row['Vistas']) || 0;
+        const existing = acc.find(p => p.path === path);
+        if (existing) existing.vistas += vistas;
+        else acc.push({ path, titulo: row['Título'] || '', vistas });
+        return acc;
+      }, []).sort((a, b) => b.vistas - a.vistas).slice(0, 5),
+      // Top dispositivos
+      dispositivos: (liveData?.dispositivos || []).slice(0, 20).reduce((acc, row) => {
+        const tipo = (row['Categoría Dispositivo'] || 'unknown').toLowerCase();
+        const usuarios = Number(row['Usuarios']) || 0;
+        const existing = acc.find(d => d.tipo === tipo);
+        if (existing) existing.usuarios += usuarios;
+        else acc.push({ tipo, usuarios });
+        return acc;
+      }, []).sort((a, b) => b.usuarios - a.usuarios)
+    };
+
+    const prompt = `Eres un experto analista de marketing digital y Google Analytics 4. Analiza los siguientes datos del cliente "${currentClient?.nombre}" y genera un análisis ejecutivo profesional.
+
+DATOS DEL CLIENTE:
+${JSON.stringify(dataSummary, null, 2)}
+
+INSTRUCCIONES:
+- Responde SIEMPRE en español
+- Tono ejecutivo y profesional, pero accesible
+- Usa formato Markdown
+- Sé específico con números y porcentajes
+- Da recomendaciones accionables y concretas
+- NO inventes datos que no están en los datos provistos
+- Si algún KPI es 0 o no aplica, no lo menciones
+
+ESTRUCTURA OBLIGATORIA:
+
+## 📊 Resumen Ejecutivo
+[2-3 líneas con la situación general del sitio en este período]
+
+## ✅ Fortalezas
+[3 puntos destacados de lo que está funcionando bien, con datos específicos]
+
+## ⚠️ Áreas de Mejora
+[3 puntos donde hay oportunidad de mejora, basados en los datos]
+
+## 🎯 Recomendaciones Accionables
+[3-5 acciones concretas y priorizadas que el cliente debería tomar, ordenadas por impacto potencial]
+
+## 💡 Insight Estratégico
+[1 insight único o no obvio que agregue valor extra al análisis]`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: CLAUDE_MODEL,
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Error ${response.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || 'No se pudo generar el análisis.';
+      setAnalysis(text);
+      setLastAnalysis(new Date());
+    } catch (err) {
+      setError(err.message || 'Error al generar el análisis');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función simple para renderizar Markdown (sin librería externa)
+  const renderMarkdown = (text) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    const elements = [];
+    let listItems = [];
+    let listKey = 0;
+
+    const flushList = () => {
+      if (listItems.length > 0) {
+        elements.push(
+          <ul key={`ul-${listKey++}`} className="space-y-2 mb-4 ml-2">
+            {listItems.map((item, i) => (
+              <li key={i} className="flex gap-2 text-sm text-slate-700 leading-relaxed">
+                <span style={{ color: GORUTY.primary }} className="font-bold flex-shrink-0">•</span>
+                <span dangerouslySetInnerHTML={{ __html: parseInline(item) }} />
+              </li>
+            ))}
+          </ul>
+        );
+        listItems = [];
+      }
+    };
+
+    const parseInline = (s) => {
+      // Bold con **texto**
+      let result = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #1e293b">$1</strong>');
+      // Italic con *texto*
+      result = result.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      // Code con `texto`
+      result = result.replace(/`(.+?)`/g, '<code style="background: #f3f0ff; color: #5b4bff; padding: 2px 6px; border-radius: 4px; font-size: 0.85em">$1</code>');
+      return result;
+    };
+
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith('## ')) {
+        flushList();
+        const heading = trimmed.replace('## ', '');
+        elements.push(
+          <h3 key={`h3-${idx}`} className="text-lg font-bold text-slate-900 mt-5 mb-3 flex items-center gap-2">
+            {heading}
+          </h3>
+        );
+      } else if (trimmed.startsWith('# ')) {
+        flushList();
+        elements.push(
+          <h2 key={`h2-${idx}`} className="text-xl font-bold text-slate-900 mt-4 mb-3">
+            {trimmed.replace('# ', '')}
+          </h2>
+        );
+      } else if (/^[\-\*]\s/.test(trimmed)) {
+        listItems.push(trimmed.replace(/^[\-\*]\s/, ''));
+      } else if (/^\d+\.\s/.test(trimmed)) {
+        listItems.push(trimmed.replace(/^\d+\.\s/, ''));
+      } else if (trimmed === '') {
+        flushList();
+      } else {
+        flushList();
+        elements.push(
+          <p key={`p-${idx}`} className="text-sm text-slate-700 leading-relaxed mb-3"
+             dangerouslySetInnerHTML={{ __html: parseInline(trimmed) }} />
+        );
+      }
+    });
+    flushList();
+    return elements;
+  };
+
+  return (
+    <div className="bg-gradient-to-br from-violet-50 to-white border border-violet-200 rounded-xl p-6 shadow-sm mb-6">
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-lg flex-shrink-0" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>
+            <Bot className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              Análisis IA con Claude
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
+                ✨ AI
+              </span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Genera insights y recomendaciones automáticas de los datos de {currentClient?.emoji} {currentClient?.nombre}
+            </p>
+          </div>
+        </div>
+
+        {!loading && (
+          <button
+            onClick={generateAnalysis}
+            disabled={loading || !liveData}
+            className="px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg disabled:opacity-60 flex-shrink-0"
+            style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}
+          >
+            <Sparkles className="w-4 h-4" />
+            {analysis ? 'Regenerar' : 'Generar análisis'}
+          </button>
+        )}
+      </div>
+
+      {/* Estado vacío inicial */}
+      {!analysis && !loading && !error && (
+        <div className="bg-white/60 border border-dashed border-violet-200 rounded-lg p-8 text-center">
+          <div className="flex justify-center mb-3">
+            <div className="p-3 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}>
+              <Sparkles className="w-6 h-6" style={{ color: GORUTY.primary }} />
+            </div>
+          </div>
+          <p className="text-sm text-slate-600 mb-1 font-medium">
+            Pulsa "Generar análisis" para que Claude analice los datos
+          </p>
+          <p className="text-xs text-slate-400">
+            Tarda 5-10 segundos · Análisis ejecutivo con recomendaciones
+          </p>
+        </div>
+      )}
+
+      {/* Cargando */}
+      {loading && (
+        <div className="bg-white/60 border border-violet-200 rounded-lg p-8 text-center">
+          <div className="flex justify-center mb-3">
+            <div className="relative">
+              <Sparkles className="w-12 h-12 animate-pulse" style={{ color: GORUTY.primary }} />
+            </div>
+          </div>
+          <p className="text-sm text-slate-700 font-medium mb-1">Claude está analizando los datos...</p>
+          <p className="text-xs text-slate-500">Esto puede tardar unos segundos</p>
+          <div className="mt-4 max-w-xs mx-auto bg-violet-100 rounded-full h-1.5 overflow-hidden">
+            <div className="h-full rounded-full animate-pulse" style={{ background: `linear-gradient(90deg, ${GORUTY.primary}, ${GORUTY.tertiary})`, width: '60%' }}></div>
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-rose-800 mb-1">Error al generar el análisis</p>
+            <p className="text-xs text-rose-600">{error}</p>
+            <button onClick={generateAnalysis} className="mt-2 text-xs font-semibold text-rose-700 hover:text-rose-800 underline">
+              Reintentar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Resultado del análisis */}
+      {analysis && !loading && (
+        <div className="bg-white border border-violet-100 rounded-lg p-6 shadow-sm">
+          <div className="prose prose-slate max-w-none">
+            {renderMarkdown(analysis)}
+          </div>
+          {lastAnalysis && (
+            <div className="mt-6 pt-4 border-t border-violet-100 flex items-center justify-between text-xs text-slate-400">
+              <div className="flex items-center gap-2">
+                <Zap className="w-3 h-3" />
+                <span>Generado por Claude · {lastAnalysis.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <span>Powered by Anthropic</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// DASHBOARD PRINCIPAL
 // =============================================
 function Dashboard({ session, onLogout }) {
   const [dateRange, setDateRange] = useState('all');
@@ -186,7 +450,6 @@ function Dashboard({ session, onLogout }) {
   const [customEnd, setCustomEnd] = useState('2026-04-23');
   const [showCustomDate, setShowCustomDate] = useState(false);
 
-  // Inicializar cliente activo según permisos
   const [activeClient, setActiveClient] = useState(
     session.cliente === '*' ? session.clientes[0]?.id : session.cliente
   );
@@ -198,50 +461,24 @@ function Dashboard({ session, onLogout }) {
   const [refreshError, setRefreshError] = useState(null);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
 
-  // ============================================================
-  // 🎯 CACHÉ DE DATOS POR CLIENTE
-  // Estructura: { 'hotel-termas': {data, lastUpdate}, 'aldea-nativa': {...} }
-  // ============================================================
   const [clientCache, setClientCache] = useState({});
-
-  // Datos del cliente activo (vienen del caché)
   const liveData = clientCache[activeClient]?.data || null;
   const lastUpdate = clientCache[activeClient]?.lastUpdate || null;
 
   const currentClient = session.clientes.find(c => c.id === activeClient) || session.clientes[0];
 
-  // ============================================================
-  // 🔄 FUNCIÓN DE ACTUALIZACIÓN — solo se ejecuta al apretar el botón
-  // ============================================================
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setRefreshError(null);
     setRefreshSuccess(false);
-
     try {
       const url = `${API_URL}?token=${encodeURIComponent(session.token)}&cliente=${activeClient}`;
       const response = await fetch(url);
-
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-
-      if (data.requiereLogin) {
-        // Sesión expirada
-        onLogout();
-        return;
-      }
-
+      if (data.requiereLogin) { onLogout(); return; }
       if (data.error) throw new Error(data.error);
-
-      // Guardar en caché del cliente actual
-      setClientCache(prev => ({
-        ...prev,
-        [activeClient]: {
-          data: data,
-          lastUpdate: new Date()
-        }
-      }));
-
+      setClientCache(prev => ({ ...prev, [activeClient]: { data, lastUpdate: new Date() } }));
       setRefreshKey(k => k + 1);
       setRefreshSuccess(true);
       setTimeout(() => setRefreshSuccess(false), 3000);
@@ -253,22 +490,13 @@ function Dashboard({ session, onLogout }) {
     }
   };
 
-  // ============================================================
-  // 🎯 CARGA INICIAL — Solo se ejecuta UNA vez al loguearse
-  // (carga los datos del primer cliente automáticamente)
-  // ============================================================
   useEffect(() => {
-    if (!clientCache[activeClient]) {
-      handleRefresh();
-    }
+    if (!clientCache[activeClient]) handleRefresh();
     // eslint-disable-next-line
   }, []);
 
-  // ⚠️ NOTA: Removimos el useEffect que se ejecutaba al cambiar de cliente.
-  // Ahora cuando cambias de cliente, se muestra el caché (si existe) o
-  // un mensaje invitando a apretar "Actualizar".
-
   const [sections, setSections] = useState({
+    aiAnalysis: true,  // 🤖 Nueva sección de IA, abierta por defecto
     acquisition: true,
     audience: true,
     behavior: true,
@@ -281,15 +509,13 @@ function Dashboard({ session, onLogout }) {
 
   const chartColors = [GORUTY.primary, GORUTY.secondary, GORUTY.tertiary, GORUTY.accent, GORUTY.deepPurple, GORUTY.light, GORUTY.pink];
 
-  // Transformar data
   const allTrendData = useMemo(() => {
     if (!liveData?.resumenDiario || liveData.resumenDiario.length === 0) return [];
     return liveData.resumenDiario.map(row => {
       const fecha = String(row['Fecha'] || '').slice(5, 10);
       const fechaCompleta = String(row['Fecha'] || '').slice(0, 10);
       return {
-        fecha,
-        fechaCompleta,
+        fecha, fechaCompleta,
         usuarios: Number(row['Usuarios Activos']) || 0,
         usuariosNuevos: Number(row['Usuarios Nuevos']) || 0,
         sesiones: Number(row['Sesiones']) || 0,
@@ -312,10 +538,7 @@ function Dashboard({ session, onLogout }) {
     liveData.eventos.forEach(ev => {
       if (ev['Nombre del Evento'] === 'purchase') {
         const fecha = String(ev['Fecha'] || '').slice(5, 10);
-        map[fecha] = {
-          conv: Number(ev['Conversiones']) || 0,
-          valor: Number(ev['Valor del Evento']) || 0,
-        };
+        map[fecha] = { conv: Number(ev['Conversiones']) || 0, valor: Number(ev['Valor del Evento']) || 0 };
       }
     });
     return map;
@@ -335,22 +558,14 @@ function Dashboard({ session, onLogout }) {
     if (dateRange === '7d') return data.slice(-7);
     if (dateRange === '14d') return data.slice(-14);
     if (dateRange === '28d') return data.slice(-28);
-    if (dateRange === 'custom') {
-      return data.filter(d => {
-        return d.fechaCompleta >= customStart && d.fechaCompleta <= customEnd;
-      });
-    }
+    if (dateRange === 'custom') return data.filter(d => d.fechaCompleta >= customStart && d.fechaCompleta <= customEnd);
     return data;
   }, [dateRange, customStart, customEnd, trendDataConConversiones]);
 
   const daysCount = trendData.length;
 
-  // ============================================================
-  // 🎯 HELPER: filtro de fechas universal para TODAS las tablas
-  // ============================================================
   const dateFilter = useMemo(() => {
     const fechasValidas = new Set(trendData.map(d => d.fechaCompleta).filter(Boolean));
-
     return (fechaRaw) => {
       if (!fechaRaw) return true;
       const fecha = String(fechaRaw).slice(0, 10);
@@ -393,44 +608,38 @@ function Dashboard({ session, onLogout }) {
   const canalesData = useMemo(() => {
     if (!liveData?.fuentesTrafico) return [];
     const map = {};
-    liveData.fuentesTrafico
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const canal = row['Canal'] || 'Otro';
-        if (!map[canal]) map[canal] = { nombre: canal, usuarios: 0, sesiones: 0, conversiones: 0 };
-        map[canal].usuarios += Number(row['Usuarios']) || 0;
-        map[canal].sesiones += Number(row['Sesiones']) || 0;
-        map[canal].conversiones += Number(row['Conversiones']) || 0;
-      });
+    liveData.fuentesTrafico.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const canal = row['Canal'] || 'Otro';
+      if (!map[canal]) map[canal] = { nombre: canal, usuarios: 0, sesiones: 0, conversiones: 0 };
+      map[canal].usuarios += Number(row['Usuarios']) || 0;
+      map[canal].sesiones += Number(row['Sesiones']) || 0;
+      map[canal].conversiones += Number(row['Conversiones']) || 0;
+    });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 9).map((c, i) => ({ ...c, color: chartColors[i % chartColors.length] }));
   }, [liveData, dateFilter]);
 
   const sourceMediumData = useMemo(() => {
     if (!liveData?.fuentesTrafico) return [];
     const map = {};
-    liveData.fuentesTrafico
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const fuente = row['Source/Medium'] || 'unknown';
-        if (!map[fuente]) map[fuente] = { fuente, sesiones: 0, usuarios: 0, conv: 0 };
-        map[fuente].sesiones += Number(row['Sesiones']) || 0;
-        map[fuente].usuarios += Number(row['Usuarios']) || 0;
-        map[fuente].conv += Number(row['Conversiones']) || 0;
-      });
+    liveData.fuentesTrafico.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const fuente = row['Source/Medium'] || 'unknown';
+      if (!map[fuente]) map[fuente] = { fuente, sesiones: 0, usuarios: 0, conv: 0 };
+      map[fuente].sesiones += Number(row['Sesiones']) || 0;
+      map[fuente].usuarios += Number(row['Usuarios']) || 0;
+      map[fuente].conv += Number(row['Conversiones']) || 0;
+    });
     return Object.values(map).sort((a, b) => b.sesiones - a.sesiones).slice(0, 12);
   }, [liveData, dateFilter]);
 
   const paisesData = useMemo(() => {
     if (!liveData?.geografia) return [];
     const map = {};
-    liveData.geografia
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const pais = row['País'] || 'Otros';
-        if (!map[pais]) map[pais] = { pais, usuarios: 0, sesiones: 0 };
-        map[pais].usuarios += Number(row['Usuarios']) || 0;
-        map[pais].sesiones += Number(row['Sesiones']) || 0;
-      });
+    liveData.geografia.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const pais = row['País'] || 'Otros';
+      if (!map[pais]) map[pais] = { pais, usuarios: 0, sesiones: 0 };
+      map[pais].usuarios += Number(row['Usuarios']) || 0;
+      map[pais].sesiones += Number(row['Sesiones']) || 0;
+    });
     const total = Object.values(map).reduce((s, p) => s + p.usuarios, 0);
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 10).map(p => ({ ...p, porcentaje: total ? ((p.usuarios / total) * 100).toFixed(1) : 0 }));
   }, [liveData, dateFilter]);
@@ -438,29 +647,25 @@ function Dashboard({ session, onLogout }) {
   const ciudadesData = useMemo(() => {
     if (!liveData?.geografia) return [];
     const map = {};
-    liveData.geografia
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const ciudad = row['Ciudad'] || '(not set)';
-        if (ciudad === '(not set)' || !ciudad) return;
-        if (!map[ciudad]) map[ciudad] = { ciudad, usuarios: 0 };
-        map[ciudad].usuarios += Number(row['Usuarios']) || 0;
-      });
+    liveData.geografia.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const ciudad = row['Ciudad'] || '(not set)';
+      if (ciudad === '(not set)' || !ciudad) return;
+      if (!map[ciudad]) map[ciudad] = { ciudad, usuarios: 0 };
+      map[ciudad].usuarios += Number(row['Usuarios']) || 0;
+    });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 8);
   }, [liveData, dateFilter]);
 
   const dispositivosData = useMemo(() => {
     if (!liveData?.dispositivos) return [];
     const map = {};
-    liveData.dispositivos
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const tipoRaw = row['Categoría Dispositivo'] || 'unknown';
-        const tipo = tipoRaw.charAt(0).toUpperCase() + tipoRaw.slice(1);
-        if (!map[tipo]) map[tipo] = { tipo, usuarios: 0, sesiones: 0 };
-        map[tipo].usuarios += Number(row['Usuarios']) || 0;
-        map[tipo].sesiones += Number(row['Sesiones']) || 0;
-      });
+    liveData.dispositivos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const tipoRaw = row['Categoría Dispositivo'] || 'unknown';
+      const tipo = tipoRaw.charAt(0).toUpperCase() + tipoRaw.slice(1);
+      if (!map[tipo]) map[tipo] = { tipo, usuarios: 0, sesiones: 0 };
+      map[tipo].usuarios += Number(row['Usuarios']) || 0;
+      map[tipo].sesiones += Number(row['Sesiones']) || 0;
+    });
     const colors = { Mobile: GORUTY.primary, Desktop: GORUTY.tertiary, Tablet: GORUTY.light };
     return Object.values(map).map(d => ({ ...d, color: colors[d.tipo] || GORUTY.secondary }));
   }, [liveData, dateFilter]);
@@ -468,13 +673,11 @@ function Dashboard({ session, onLogout }) {
   const osData = useMemo(() => {
     if (!liveData?.dispositivos) return [];
     const map = {};
-    liveData.dispositivos
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const os = row['Sistema Operativo'] || 'unknown';
-        if (!map[os]) map[os] = { os, usuarios: 0 };
-        map[os].usuarios += Number(row['Usuarios']) || 0;
-      });
+    liveData.dispositivos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const os = row['Sistema Operativo'] || 'unknown';
+      if (!map[os]) map[os] = { os, usuarios: 0 };
+      map[os].usuarios += Number(row['Usuarios']) || 0;
+    });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 5);
   }, [liveData, dateFilter]);
 
@@ -482,43 +685,37 @@ function Dashboard({ session, onLogout }) {
     if (!liveData?.dispositivos) return [];
     const map = {};
     let total = 0;
-    liveData.dispositivos
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const nav = row['Navegador'] || 'unknown';
-        if (!map[nav]) map[nav] = { navegador: nav, usuarios: 0 };
-        const u = Number(row['Usuarios']) || 0;
-        map[nav].usuarios += u;
-        total += u;
-      });
+    liveData.dispositivos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const nav = row['Navegador'] || 'unknown';
+      if (!map[nav]) map[nav] = { navegador: nav, usuarios: 0 };
+      const u = Number(row['Usuarios']) || 0;
+      map[nav].usuarios += u;
+      total += u;
+    });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 6).map(n => ({ ...n, porcentaje: total ? ((n.usuarios / total) * 100).toFixed(1) : 0 }));
   }, [liveData, dateFilter]);
 
   const paginasData = useMemo(() => {
     if (!liveData?.paginas) return [];
     const map = {};
-    liveData.paginas
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const path = row['Path sin Query String'] || row['Página (Path)'] || '/';
-        if (!map[path]) map[path] = { path, titulo: row['Título'] || '', vistas: 0, usuarios: 0 };
-        map[path].vistas += Number(row['Vistas']) || 0;
-        map[path].usuarios += Number(row['Usuarios']) || 0;
-      });
+    liveData.paginas.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const path = row['Path sin Query String'] || row['Página (Path)'] || '/';
+      if (!map[path]) map[path] = { path, titulo: row['Título'] || '', vistas: 0, usuarios: 0 };
+      map[path].vistas += Number(row['Vistas']) || 0;
+      map[path].usuarios += Number(row['Usuarios']) || 0;
+    });
     return Object.values(map).sort((a, b) => b.vistas - a.vistas).slice(0, 13);
   }, [liveData, dateFilter]);
 
   const eventosData = useMemo(() => {
     if (!liveData?.eventos) return [];
     const map = {};
-    liveData.eventos
-      .filter(row => dateFilter(row['Fecha']))
-      .forEach(row => {
-        const ev = row['Nombre del Evento'] || 'unknown';
-        if (!map[ev]) map[ev] = { evento: ev, conteo: 0, usuarios: 0, esConversion: row['¿Es Conversión?'] === 'TRUE' || row['¿Es Conversión?'] === true };
-        map[ev].conteo += Number(row['Conversiones']) || 0;
-        map[ev].usuarios += Number(row['Usuarios']) || 0;
-      });
+    liveData.eventos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const ev = row['Nombre del Evento'] || 'unknown';
+      if (!map[ev]) map[ev] = { evento: ev, conteo: 0, usuarios: 0, esConversion: row['¿Es Conversión?'] === 'TRUE' || row['¿Es Conversión?'] === true };
+      map[ev].conteo += Number(row['Conversiones']) || 0;
+      map[ev].usuarios += Number(row['Usuarios']) || 0;
+    });
     return Object.values(map).sort((a, b) => b.usuarios - a.usuarios).slice(0, 12);
   }, [liveData, dateFilter]);
 
@@ -543,14 +740,17 @@ function Dashboard({ session, onLogout }) {
     </div>
   );
 
-  const SectionHeader = ({ title, icon: Icon, sectionKey, subtitle }) => (
+  const SectionHeader = ({ title, icon: Icon, sectionKey, subtitle, badge }) => (
     <button onClick={() => toggleSection(sectionKey)} className="w-full flex items-center justify-between py-3 px-4 bg-white border border-violet-100 hover:border-violet-300 rounded-lg mb-4 transition-all">
       <div className="flex items-center gap-3">
         <div className="p-1.5 rounded-md" style={{ backgroundColor: `${GORUTY.primary}15` }}>
           <Icon className="w-4 h-4" style={{ color: GORUTY.primary }} />
         </div>
         <div className="text-left">
-          <div className="text-slate-900 font-semibold">{title}</div>
+          <div className="text-slate-900 font-semibold flex items-center gap-2">
+            {title}
+            {badge && <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>{badge}</span>}
+          </div>
           {subtitle && <div className="text-xs text-slate-500">{subtitle}</div>}
         </div>
       </div>
@@ -570,15 +770,11 @@ function Dashboard({ session, onLogout }) {
     labelStyle: { color: '#64748b', fontWeight: 600 },
   };
 
-  // ============================================================
-  // 🎯 ESTADO: ¿el cliente activo tiene datos cargados?
-  // ============================================================
   const hasDataForActiveClient = !!liveData;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-purple-50 text-slate-800 p-6">
       <div className="max-w-[1400px] mx-auto">
-
         {/* TOAST */}
         {refreshSuccess && (
           <div className="fixed top-4 right-4 z-50 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
@@ -608,11 +804,7 @@ function Dashboard({ session, onLogout }) {
                 {liveData && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">✓ Datos en vivo</span>}
               </div>
               <p className="text-sm text-slate-500 flex items-center gap-2">
-                {lastUpdate ? (
-                  <span>Última actualización: {lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
-                ) : (
-                  <span className="text-amber-600">Sin datos cargados — pulsa Actualizar</span>
-                )}
+                {lastUpdate ? (<span>Última actualización: {lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>) : (<span className="text-amber-600">Sin datos cargados — pulsa Actualizar</span>)}
               </p>
             </div>
           </div>
@@ -622,7 +814,6 @@ function Dashboard({ session, onLogout }) {
               {isRefreshing ? 'Actualizando...' : 'Actualizar'}
             </button>
 
-            {/* Selector cliente (solo si admin) */}
             {session.cliente === '*' && session.clientes.length > 1 && (
               <div className="relative">
                 <button onClick={() => setShowClientDropdown(!showClientDropdown)} className="px-4 py-2 bg-white border border-violet-200 hover:border-violet-400 rounded-lg text-sm flex items-center gap-2 transition text-slate-700 font-medium">
@@ -651,7 +842,6 @@ function Dashboard({ session, onLogout }) {
               </div>
             )}
 
-            {/* Menú usuario */}
             <div className="relative">
               <button onClick={() => setShowUserMenu(!showUserMenu)} className="px-3 py-2 bg-white border border-violet-200 hover:border-violet-400 rounded-lg text-sm flex items-center gap-2 transition text-slate-700 font-medium">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-white font-bold" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>
@@ -677,7 +867,7 @@ function Dashboard({ session, onLogout }) {
           </div>
         </div>
 
-        {/* 🎯 PANTALLA "SIN DATOS" — cuando el cliente activo no tiene datos cargados */}
+        {/* SIN DATOS */}
         {!hasDataForActiveClient && !isRefreshing && (
           <div className="bg-white border-2 border-dashed border-violet-200 rounded-2xl p-12 text-center shadow-sm">
             <div className="flex justify-center mb-4">
@@ -685,37 +875,27 @@ function Dashboard({ session, onLogout }) {
                 <AlertCircle className="w-8 h-8" style={{ color: GORUTY.primary }} />
               </div>
             </div>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">
-              Sin datos cargados para {currentClient?.emoji} {currentClient?.nombre}
-            </h2>
-            <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
-              Para ver el dashboard de este cliente, pulsa el botón <strong>Actualizar</strong> y se cargarán sus datos de Google Analytics.
-            </p>
-            <button
-              onClick={handleRefresh}
-              className="px-6 py-3 rounded-lg text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg mx-auto"
-              style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}
-            >
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Sin datos cargados para {currentClient?.emoji} {currentClient?.nombre}</h2>
+            <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">Para ver el dashboard de este cliente, pulsa el botón <strong>Actualizar</strong> y se cargarán sus datos de Google Analytics.</p>
+            <button onClick={handleRefresh} className="px-6 py-3 rounded-lg text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg mx-auto" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
               <RefreshCw className="w-4 h-4" />
               Cargar datos de {currentClient?.nombre}
             </button>
           </div>
         )}
 
-        {/* 🎯 LOADER — cuando está cargando */}
+        {/* LOADER */}
         {!hasDataForActiveClient && isRefreshing && (
           <div className="bg-white border border-violet-100 rounded-2xl p-12 text-center shadow-sm">
             <div className="flex justify-center mb-4">
               <RefreshCw className="w-12 h-12 animate-spin" style={{ color: GORUTY.primary }} />
             </div>
             <h2 className="text-lg font-semibold text-slate-900 mb-1">Cargando datos...</h2>
-            <p className="text-sm text-slate-500">
-              Estamos obteniendo los datos de {currentClient?.emoji} {currentClient?.nombre}
-            </p>
+            <p className="text-sm text-slate-500">Estamos obteniendo los datos de {currentClient?.emoji} {currentClient?.nombre}</p>
           </div>
         )}
 
-        {/* 🎯 CONTENIDO DEL DASHBOARD — solo si hay datos */}
+        {/* DASHBOARD */}
         {hasDataForActiveClient && (
           <>
             {/* FILTROS */}
@@ -763,7 +943,6 @@ function Dashboard({ session, onLogout }) {
               <KpiCard icon={Target} label="Conversiones" value={fmt(kpis.conversiones)} accentColor={GORUTY.deepPurple} />
               <KpiCard icon={DollarSign} label="Valor Compras" value={fmtMoney(kpis.valorPurchase)} accentColor={GORUTY.primary} />
             </div>
-
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
               <KpiCard icon={TrendingUp} label="Tasa Engagement" value={`${kpis.tasaEngagement}%`} accentColor={GORUTY.primary} />
               <KpiCard icon={Activity} label="Tasa Rebote" value={`${kpis.tasaRebote}%`} accentColor={GORUTY.danger} />
@@ -772,6 +951,18 @@ function Dashboard({ session, onLogout }) {
               <KpiCard icon={Activity} label="Sesiones Comp." value={fmt(kpis.sesionesEng)} accentColor={GORUTY.accent} />
               <KpiCard icon={Target} label="Tasa Conv." value={`${kpis.tasaConversionSesion}%`} accentColor={GORUTY.deepPurple} />
             </div>
+
+            {/* 🤖 SECCIÓN ANÁLISIS IA — NUEVA */}
+            <SectionHeader title="Análisis IA" subtitle="Insights y recomendaciones generadas por Claude" icon={Bot} sectionKey="aiAnalysis" badge="✨ Nuevo" />
+            {sections.aiAnalysis && (
+              <AIAnalysisPanel
+                liveData={liveData}
+                kpis={kpis}
+                currentClient={currentClient}
+                dateRange={dateRange}
+                daysCount={daysCount}
+              />
+            )}
 
             <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
               <ResponsiveContainer width="100%" height={320}>
@@ -986,25 +1177,20 @@ function Dashboard({ session, onLogout }) {
 }
 
 // =============================================
-// COMPONENTE ROOT (decide login o dashboard)
+// COMPONENTE ROOT
 // =============================================
 export default function App() {
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    // Recuperar sesión guardada
     const saved = localStorage.getItem('grouty_session');
     if (saved) {
       try {
         const data = JSON.parse(saved);
-        // Validar que la sesión no tenga más de 24h
         const horasTranscurridas = (Date.now() - (data.loginTime || 0)) / (1000 * 60 * 60);
-        if (horasTranscurridas < 24) {
-          setSession(data);
-        } else {
-          localStorage.removeItem('grouty_session');
-        }
+        if (horasTranscurridas < 24) setSession(data);
+        else localStorage.removeItem('grouty_session');
       } catch (e) {
         localStorage.removeItem('grouty_session');
       }
@@ -1040,9 +1226,7 @@ export default function App() {
     );
   }
 
-  if (!session) {
-    return <LoginScreen onLogin={handleLogin} />;
-  }
+  if (!session) return <LoginScreen onLogin={handleLogin} />;
 
   return <Dashboard session={session} onLogout={handleLogout} />;
 }
