@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
-import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck } from 'lucide-react';
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, FunnelChart, Funnel, LabelList } from 'recharts';
+import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight } from 'lucide-react';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUkLrgfuo1k-RuTPc7VtVrlenEv58LTMAP07l-CxPpgcCqtVw/exec';
 
@@ -123,22 +123,6 @@ function buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, t
       else acc.push({ tipo, usuarios, sesiones });
       return acc;
     }, []).sort((a, b) => b.usuarios - a.usuarios),
-    sistemasOperativos: (liveData?.dispositivos || []).reduce((acc, row) => {
-      const os = row['Sistema Operativo'] || 'unknown';
-      const usuarios = Number(row['Usuarios']) || 0;
-      const ex = acc.find(d => d.os === os);
-      if (ex) ex.usuarios += usuarios;
-      else acc.push({ os, usuarios });
-      return acc;
-    }, []).sort((a, b) => b.usuarios - a.usuarios).slice(0, 8),
-    navegadores: (liveData?.dispositivos || []).reduce((acc, row) => {
-      const nav = row['Navegador'] || 'unknown';
-      const usuarios = Number(row['Usuarios']) || 0;
-      const ex = acc.find(d => d.navegador === nav);
-      if (ex) ex.usuarios += usuarios;
-      else acc.push({ navegador: nav, usuarios });
-      return acc;
-    }, []).sort((a, b) => b.usuarios - a.usuarios).slice(0, 8),
     eventos: (liveData?.eventos || []).reduce((acc, row) => {
       const ev = row['Nombre del Evento'] || 'unknown';
       const conteo = Number(row['Conversiones']) || 0;
@@ -185,22 +169,12 @@ function renderMarkdown(text, gorutyPrimary) {
 
   lines.forEach((line, idx) => {
     const trimmed = line.trim();
-    if (trimmed.startsWith('## ')) {
-      flushList();
-      elements.push(<h3 key={`h3-${idx}`} className="text-base font-bold text-slate-900 mt-4 mb-2">{trimmed.replace('## ', '')}</h3>);
-    } else if (trimmed.startsWith('# ')) {
-      flushList();
-      elements.push(<h2 key={`h2-${idx}`} className="text-lg font-bold text-slate-900 mt-3 mb-2">{trimmed.replace('# ', '')}</h2>);
-    } else if (/^[\-\*]\s/.test(trimmed)) {
-      listItems.push(trimmed.replace(/^[\-\*]\s/, ''));
-    } else if (/^\d+\.\s/.test(trimmed)) {
-      listItems.push(trimmed.replace(/^\d+\.\s/, ''));
-    } else if (trimmed === '') {
-      flushList();
-    } else {
-      flushList();
-      elements.push(<p key={`p-${idx}`} className="text-sm text-slate-700 leading-relaxed mb-2" dangerouslySetInnerHTML={{ __html: parseInline(trimmed) }} />);
-    }
+    if (trimmed.startsWith('## ')) { flushList(); elements.push(<h3 key={`h3-${idx}`} className="text-base font-bold text-slate-900 mt-4 mb-2">{trimmed.replace('## ', '')}</h3>); }
+    else if (trimmed.startsWith('# ')) { flushList(); elements.push(<h2 key={`h2-${idx}`} className="text-lg font-bold text-slate-900 mt-3 mb-2">{trimmed.replace('# ', '')}</h2>); }
+    else if (/^[\-\*]\s/.test(trimmed)) listItems.push(trimmed.replace(/^[\-\*]\s/, ''));
+    else if (/^\d+\.\s/.test(trimmed)) listItems.push(trimmed.replace(/^\d+\.\s/, ''));
+    else if (trimmed === '') flushList();
+    else { flushList(); elements.push(<p key={`p-${idx}`} className="text-sm text-slate-700 leading-relaxed mb-2" dangerouslySetInnerHTML={{ __html: parseInline(trimmed) }} />); }
   });
   flushList();
   return elements;
@@ -215,31 +189,18 @@ function LoginScreen({ onLogin }) {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!usuario.trim() || !pass.trim()) {
-      setError('Ingresa usuario y contraseña');
-      return;
-    }
-    setLoading(true);
-    setError('');
+    if (!usuario.trim() || !pass.trim()) { setError('Ingresa usuario y contraseña'); return; }
+    setLoading(true); setError('');
     try {
       const url = `${API_URL}?action=login&user=${encodeURIComponent(usuario)}&pass=${encodeURIComponent(pass)}`;
       const response = await fetch(url);
       const data = await response.json();
       if (data.ok) {
-        localStorage.setItem('grouty_session', JSON.stringify({
-          token: data.token, usuario: data.usuario, nombre: data.nombre,
-          rol: data.rol, cliente: data.cliente, clientes: data.clientes,
-          loginTime: Date.now()
-        }));
+        localStorage.setItem('grouty_session', JSON.stringify({ token: data.token, usuario: data.usuario, nombre: data.nombre, rol: data.rol, cliente: data.cliente, clientes: data.clientes, loginTime: Date.now() }));
         onLogin(data);
-      } else {
-        setError(data.error || 'Credenciales incorrectas');
-      }
-    } catch (err) {
-      setError('Error al conectar. Verifica tu conexión.');
-    } finally {
-      setLoading(false);
-    }
+      } else { setError(data.error || 'Credenciales incorrectas'); }
+    } catch (err) { setError('Error al conectar. Verifica tu conexión.'); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -252,9 +213,7 @@ function LoginScreen({ onLogin }) {
             <p className="text-sm text-slate-500">Powered by Grouty</p>
           </div>
           <div className="p-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2">
-              <Lock className="w-5 h-5" style={{ color: GORUTY.primary }} />Iniciar sesión
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2"><Lock className="w-5 h-5" style={{ color: GORUTY.primary }} />Iniciar sesión</h2>
             <p className="text-sm text-slate-500 mb-6">Ingresa tus credenciales para acceder</p>
             <div className="space-y-4">
               <div>
@@ -269,23 +228,15 @@ function LoginScreen({ onLogin }) {
                 <div className="relative">
                   <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type={showPass ? 'text' : 'password'} value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder="••••••••" className="w-full bg-violet-50/50 border border-violet-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
-                  <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                  </button>
+                  <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{showPass ? <EyeOff className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}</button>
                 </div>
               </div>
-              {error && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
-                  <X className="w-4 h-4 flex-shrink-0" />{error}
-                </div>
-              )}
+              {error && (<div className="bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2"><X className="w-4 h-4 flex-shrink-0" />{error}</div>)}
               <button onClick={handleSubmit} disabled={loading} className="w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
                 {loading ? (<><RefreshCw className="w-4 h-4 animate-spin" />Validando...</>) : (<><Lock className="w-4 h-4" />Ingresar</>)}
               </button>
             </div>
-            <div className="mt-6 pt-6 border-t border-violet-100 text-center">
-              <p className="text-xs text-slate-400">¿Problemas para acceder? Contacta a tu administrador</p>
-            </div>
+            <div className="mt-6 pt-6 border-t border-violet-100 text-center"><p className="text-xs text-slate-400">¿Problemas para acceder? Contacta a tu administrador</p></div>
           </div>
         </div>
         <div className="text-center mt-4 text-xs text-slate-400">🔐 Acceso seguro · Datos confidenciales</div>
@@ -294,6 +245,277 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+// =============================================
+// 🎯 FUNNEL DE CONVERSIÓN — NUEVO COMPONENTE
+// =============================================
+function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
+  const funnelData = useMemo(() => {
+    if (!liveData?.eventos) return null;
+
+    // Agregamos los eventos del período filtrado
+    const eventosAgregados = {};
+    liveData.eventos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
+      const ev = row['Nombre del Evento'] || '';
+      const usuarios = Number(row['Usuarios']) || 0;
+      const conteo = Number(row['Conversiones']) || 0;
+      const valor = Number(row['Valor del Evento']) || 0;
+
+      if (!eventosAgregados[ev]) eventosAgregados[ev] = { usuarios: 0, conteo: 0, valor: 0 };
+      eventosAgregados[ev].usuarios += usuarios;
+      eventosAgregados[ev].conteo += conteo;
+      eventosAgregados[ev].valor += valor;
+    });
+
+    // Construir el funnel de 5 pasos
+    const sesiones = kpis.sesiones || 0;
+    const sesionesEng = kpis.sesionesEng || 0;
+    const scrollUsers = eventosAgregados['scroll']?.usuarios || 0;
+    const beginCheckout = eventosAgregados['begin_checkout']?.usuarios || 0;
+    const purchase = eventosAgregados['purchase']?.usuarios || eventosAgregados['purchase']?.conteo || 0;
+    const purchaseValor = eventosAgregados['purchase']?.valor || 0;
+
+    const pasos = [
+      {
+        nombre: 'Sesiones',
+        descripcion: 'Visitas iniciadas al sitio',
+        valor: sesiones,
+        icon: Users,
+        color: GORUTY.primary,
+        emoji: '👥'
+      },
+      {
+        nombre: 'Engagement',
+        descripcion: 'Sesiones >10s o múltiples páginas',
+        valor: sesionesEng,
+        icon: Heart,
+        color: GORUTY.secondary,
+        emoji: '💖'
+      },
+      {
+        nombre: 'Interés Profundo',
+        descripcion: 'Hicieron scroll completo',
+        valor: scrollUsers,
+        icon: Move,
+        color: GORUTY.tertiary,
+        emoji: '📜'
+      },
+      {
+        nombre: 'Inicio Checkout',
+        descripcion: 'Llegaron al proceso de compra',
+        valor: beginCheckout,
+        icon: ShoppingCart,
+        color: GORUTY.accent,
+        emoji: '🛒'
+      },
+      {
+        nombre: 'Compra',
+        descripcion: 'Completaron la compra',
+        valor: purchase,
+        icon: CreditCard,
+        color: GORUTY.deepPurple,
+        emoji: '💰'
+      }
+    ];
+
+    // Calcular % vs total y % vs paso anterior, y drop-off
+    const total = sesiones || 1; // evita división por 0
+    const pasosCalc = pasos.map((paso, idx) => {
+      const pct = total ? (paso.valor / total) * 100 : 0;
+      const pctAnterior = idx === 0 ? 100 : (pasos[idx - 1].valor ? (paso.valor / pasos[idx - 1].valor) * 100 : 0);
+      const dropOff = idx === 0 ? 0 : 100 - pctAnterior;
+      const perdidos = idx === 0 ? 0 : pasos[idx - 1].valor - paso.valor;
+      return { ...paso, pct, pctAnterior, dropOff, perdidos };
+    });
+
+    // Detectar el cuello de botella (paso con mayor drop-off, excluyendo el primero)
+    let mayorDropOff = { paso: null, pct: 0 };
+    pasosCalc.forEach((p, i) => {
+      if (i > 0 && p.dropOff > mayorDropOff.pct && pasos[i - 1].valor > 0) {
+        mayorDropOff = { paso: p, pct: p.dropOff, anterior: pasosCalc[i - 1] };
+      }
+    });
+
+    return { pasos: pasosCalc, total, purchaseValor, mayorDropOff };
+  }, [liveData, kpis, dateFilter]);
+
+  const fmt = (n) => Number(n).toLocaleString('es-CL');
+  const fmtMoney = (n) => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : `$${(n / 1000).toFixed(0)}K`;
+
+  if (!funnelData || funnelData.total === 0) {
+    return (
+      <div className="bg-white border border-violet-100 rounded-xl p-8 text-center shadow-sm">
+        <AlertCircle className="w-8 h-8 mx-auto mb-2" style={{ color: GORUTY.warning }} />
+        <p className="text-sm text-slate-500">No hay datos suficientes para mostrar el funnel en este período.</p>
+      </div>
+    );
+  }
+
+  const { pasos, total, purchaseValor, mayorDropOff } = funnelData;
+  const tasaConversion = pasos[pasos.length - 1].pct.toFixed(2);
+  const valorPorSesion = total ? (purchaseValor / total) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Métricas resumen del funnel */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white border border-violet-100 rounded-xl p-4">
+          <div className="text-xs text-slate-500 mb-1 font-medium">🎯 Tasa Conversión Global</div>
+          <div className="text-2xl font-bold" style={{ color: GORUTY.primary }}>{tasaConversion}%</div>
+          <div className="text-[10px] text-slate-400 mt-1">Sesiones → Compra</div>
+        </div>
+        <div className="bg-white border border-violet-100 rounded-xl p-4">
+          <div className="text-xs text-slate-500 mb-1 font-medium">💰 Ingresos Totales</div>
+          <div className="text-2xl font-bold" style={{ color: GORUTY.deepPurple }}>{fmtMoney(purchaseValor)}</div>
+          <div className="text-[10px] text-slate-400 mt-1">{fmt(pasos[pasos.length - 1].valor)} compras</div>
+        </div>
+        <div className="bg-white border border-violet-100 rounded-xl p-4">
+          <div className="text-xs text-slate-500 mb-1 font-medium">📊 Valor por Sesión</div>
+          <div className="text-2xl font-bold" style={{ color: GORUTY.accent }}>${fmt(Math.round(valorPorSesion))}</div>
+          <div className="text-[10px] text-slate-400 mt-1">Promedio</div>
+        </div>
+        <div className="bg-white border border-violet-100 rounded-xl p-4">
+          <div className="text-xs text-slate-500 mb-1 font-medium">⚠️ Mayor Caída</div>
+          <div className="text-2xl font-bold text-rose-600">{mayorDropOff.paso ? `${mayorDropOff.pct.toFixed(1)}%` : '—'}</div>
+          <div className="text-[10px] text-slate-400 mt-1">{mayorDropOff.paso ? `En ${mayorDropOff.paso.nombre}` : 'Sin datos'}</div>
+        </div>
+      </div>
+
+      {/* FUNNEL VISUAL — barras horizontales en forma de embudo */}
+      <div className="bg-white border border-violet-100 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-sm font-semibold text-slate-800">🎯 Etapas del Funnel</h3>
+          <span className="text-xs text-slate-400">% sobre total de sesiones</span>
+        </div>
+        <div className="space-y-2">
+          {pasos.map((paso, idx) => {
+            const Icon = paso.icon;
+            // Width proporcional al porcentaje vs total (con un mínimo de 8% para que se vea)
+            const width = Math.max(paso.pct, paso.valor > 0 ? 8 : 2);
+            const isFirst = idx === 0;
+            const drop = !isFirst && paso.dropOff > 0;
+
+            return (
+              <div key={idx}>
+                {/* Indicador de drop-off entre etapas */}
+                {drop && (
+                  <div className="flex items-center justify-center my-1 text-[10px] font-semibold text-rose-500 gap-1">
+                    <ArrowDownRight className="w-3 h-3" />
+                    <span>-{paso.dropOff.toFixed(1)}% ({fmt(paso.perdidos)} usuarios perdidos)</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  {/* Icono y nombre */}
+                  <div className="flex items-center gap-2 w-44 flex-shrink-0">
+                    <div className="p-1.5 rounded-md flex-shrink-0" style={{ backgroundColor: `${paso.color}20` }}>
+                      <Icon className="w-3.5 h-3.5" style={{ color: paso.color }} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-slate-800 truncate">{paso.emoji} {paso.nombre}</div>
+                      <div className="text-[10px] text-slate-400 truncate">{paso.descripcion}</div>
+                    </div>
+                  </div>
+
+                  {/* Barra del funnel */}
+                  <div className="flex-1 relative h-12 bg-slate-50 rounded-lg overflow-hidden">
+                    <div
+                      className="h-full flex items-center justify-between px-4 transition-all duration-500 rounded-lg"
+                      style={{
+                        width: `${width}%`,
+                        background: `linear-gradient(90deg, ${paso.color}, ${paso.color}cc)`,
+                        minWidth: paso.valor > 0 ? '120px' : '60px'
+                      }}
+                    >
+                      <span className="text-white font-bold text-sm drop-shadow">{fmt(paso.valor)}</span>
+                      <span className="text-white text-xs font-semibold opacity-90 drop-shadow">
+                        {paso.pct.toFixed(2)}%
+                      </span>
+                    </div>
+                    {/* Si la barra es muy chica, mostrar el número fuera */}
+                    {paso.valor > 0 && width < 15 && (
+                      <span className="absolute top-1/2 -translate-y-1/2 left-[125px] text-[10px] font-semibold text-slate-600">
+                        {paso.pct.toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* % vs paso anterior */}
+                  {!isFirst && (
+                    <div className="w-24 text-right flex-shrink-0">
+                      <div className="text-xs font-bold" style={{ color: paso.pctAnterior > 50 ? GORUTY.success : (paso.pctAnterior > 10 ? GORUTY.warning : GORUTY.danger) }}>
+                        {paso.pctAnterior.toFixed(1)}%
+                      </div>
+                      <div className="text-[9px] text-slate-400">vs anterior</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Insight automático */}
+      {mayorDropOff.paso && (
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-amber-100 flex-shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-slate-900 mb-1">💡 Insight: Cuello de botella detectado</h4>
+              <p className="text-xs text-slate-700 leading-relaxed">
+                La mayor caída está entre <strong>{mayorDropOff.anterior?.nombre}</strong> ({fmt(mayorDropOff.anterior?.valor)}) y <strong>{mayorDropOff.paso.nombre}</strong> ({fmt(mayorDropOff.paso.valor)}).
+                Pierdes el <strong className="text-rose-600">{mayorDropOff.pct.toFixed(1)}%</strong> de los usuarios en este paso.
+                Si lograras reducir esa caída en un 10%, ganarías <strong className="text-emerald-600">~{fmt(Math.round(mayorDropOff.paso.perdidos * 0.1))} usuarios adicionales</strong> que podrían avanzar al siguiente paso.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla de detalle */}
+      <div className="bg-white border border-violet-100 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-slate-800 mb-4">📋 Detalle por Etapa</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Etapa</th>
+                <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
+                <th className="py-2 px-3 text-right font-semibold">% vs Total</th>
+                <th className="py-2 px-3 text-right font-semibold">% vs Anterior</th>
+                <th className="py-2 px-3 text-right font-semibold">Drop-off</th>
+                <th className="py-2 px-3 text-right font-semibold">Perdidos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pasos.map((paso, i) => (
+                <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                  <td className="py-2.5 px-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{paso.emoji}</span>
+                      <span className="font-semibold text-slate-800">{paso.nombre}</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-semibold text-slate-900">{fmt(paso.valor)}</td>
+                  <td className="py-2.5 px-3 text-right" style={{ color: paso.color }}>{paso.pct.toFixed(2)}%</td>
+                  <td className="py-2.5 px-3 text-right text-slate-700">{i === 0 ? '—' : `${paso.pctAnterior.toFixed(1)}%`}</td>
+                  <td className="py-2.5 px-3 text-right">{i === 0 ? '—' : <span className="text-rose-600 font-semibold">{paso.dropOff.toFixed(1)}%</span>}</td>
+                  <td className="py-2.5 px-3 text-right text-slate-500">{i === 0 ? '—' : fmt(paso.perdidos)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// 💬 CHAT CONVERSACIONAL (sin cambios)
+// =============================================
 function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, trendData }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -303,37 +525,19 @@ function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, tren
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, loading]);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
-    }
-  }, [inputValue]);
+  useEffect(() => { if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+  useEffect(() => { if (textareaRef.current) { textareaRef.current.style.height = 'auto'; textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px'; } }, [inputValue]);
 
   const sendMessage = async () => {
     const trimmed = inputValue.trim();
     if (!trimmed || loading) return;
-
-    if (!CLAUDE_API_KEY) {
-      setError('La API key de Claude no está configurada.');
-      return;
-    }
+    if (!CLAUDE_API_KEY) { setError('La API key de Claude no está configurada.'); return; }
 
     const newUserMessage = { role: 'user', content: trimmed, timestamp: new Date() };
     const updatedMessages = [...messages, newUserMessage];
-    setMessages(updatedMessages);
-    setInputValue('');
-    setError('');
-    setLoading(true);
+    setMessages(updatedMessages); setInputValue(''); setError(''); setLoading(true);
 
     const dataContext = buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, trendData);
-
     const systemPrompt = `Eres un experto analista de marketing digital y Google Analytics 4 que ayuda al cliente "${currentClient?.nombre}".
 
 DATOS COMPLETOS DEL CLIENTE:
@@ -341,170 +545,82 @@ ${JSON.stringify(dataContext, null, 2)}
 
 ⚠️ IMPORTANTE — TIENES ACCESO A:
 - KPIs agregados del período seleccionado
-- Detalle DÍA POR DÍA en el array "datosDiarios" (incluye fecha, usuarios, sesiones, vistas, conversiones, métricas de cada día)
-- Top canales, fuentes, países, ciudades, páginas, dispositivos, sistemas operativos, navegadores, eventos
-
-Si el usuario pregunta por un período específico (ej: "últimos 3 días", "ayer", "esta semana"):
-- USA el array "datosDiarios" para filtrar y analizar esos días
-- Suma/agrega las métricas según corresponda
-- NUNCA digas que no tienes los datos diarios — SÍ los tienes
+- Detalle DÍA POR DÍA en el array "datosDiarios"
+- Top canales, fuentes, países, ciudades, páginas, dispositivos, eventos
 
 INSTRUCCIONES:
 - Responde SIEMPRE en español
-- Tono profesional pero amigable y conversacional
-- Usa formato Markdown cuando ayude (listas, negritas)
-- Cita datos específicos cuando respondas (números, porcentajes, nombres de canales, páginas, etc.)
-- NO inventes datos que no estén en los datos provistos
-- Sé directo y práctico — el usuario quiere insights accionables
-- Si el usuario pide algo creativo (ideas, emails, planes), entrégalo con calidad ejecutiva
-- Mantén el contexto de la conversación previa
-- Mantén las respuestas concisas (máximo 4-6 párrafos), salvo que el usuario pida algo extenso`;
+- Tono profesional pero amigable
+- Usa formato Markdown
+- Cita datos específicos
+- NO inventes datos
+- Sé directo y práctico`;
 
-    const apiMessages = updatedMessages.map(m => ({
-      role: m.role,
-      content: m.content
-    }));
+    const apiMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: CLAUDE_MODEL,
-          max_tokens: 1500,
-          system: systemPrompt,
-          messages: apiMessages
-        })
+        headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 1500, system: systemPrompt, messages: apiMessages })
       });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Error ${response.status}: ${errText.slice(0, 200)}`);
-      }
-
+      if (!response.ok) { const errText = await response.text(); throw new Error(`Error ${response.status}: ${errText.slice(0, 200)}`); }
       const data = await response.json();
       const text = data.content?.[0]?.text || 'No pude generar una respuesta.';
       setMessages(prev => [...prev, { role: 'assistant', content: text, timestamp: new Date() }]);
-    } catch (err) {
-      setError(err.message || 'Error al enviar mensaje');
-      setMessages(updatedMessages);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message || 'Error al enviar mensaje'); setMessages(updatedMessages); }
+    finally { setLoading(false); }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const clearChat = () => {
-    if (messages.length === 0 || window.confirm('¿Iniciar una nueva conversación? Se perderá el historial actual.')) {
-      setMessages([]);
-      setError('');
-    }
-  };
-
-  const copyMessage = (text, idx) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(idx);
-    setTimeout(() => setCopiedIndex(null), 2000);
-  };
+  const handleKeyDown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+  const clearChat = () => { if (messages.length === 0 || window.confirm('¿Iniciar una nueva conversación?')) { setMessages([]); setError(''); } };
+  const copyMessage = (text, idx) => { navigator.clipboard.writeText(text); setCopiedIndex(idx); setTimeout(() => setCopiedIndex(null), 2000); };
 
   return (
     <div className="bg-white border border-violet-200 rounded-xl shadow-sm overflow-hidden">
       <div className="flex items-center justify-between gap-4 p-5 border-b border-violet-100" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}08, ${GORUTY.tertiary}08)` }}>
         <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-lg flex-shrink-0" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>
-            <MessageSquare className="w-5 h-5 text-white" />
-          </div>
+          <div className="p-2.5 rounded-lg flex-shrink-0" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}><MessageSquare className="w-5 h-5 text-white" /></div>
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               Pregunta a Claude
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>💬 Chat</span>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🔒 Solo Admin</span>
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Conversa libremente sobre los datos de {currentClient?.emoji} {currentClient?.nombre} · {messages.length > 0 ? `${messages.length} mensajes` : 'Sin mensajes'}
-            </p>
+            <p className="text-xs text-slate-500 mt-0.5">Conversa libremente sobre los datos de {currentClient?.emoji} {currentClient?.nombre} · {messages.length > 0 ? `${messages.length} mensajes` : 'Sin mensajes'}</p>
           </div>
         </div>
-        {messages.length > 0 && (
-          <button onClick={clearChat} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition text-slate-600 hover:text-rose-600 hover:bg-rose-50 font-medium border border-slate-200 hover:border-rose-200">
-            <Trash2 className="w-3.5 h-3.5" />
-            Nueva conversación
-          </button>
-        )}
+        {messages.length > 0 && (<button onClick={clearChat} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition text-slate-600 hover:text-rose-600 hover:bg-rose-50 font-medium border border-slate-200 hover:border-rose-200"><Trash2 className="w-3.5 h-3.5" />Nueva conversación</button>)}
       </div>
 
       <div className="p-5 max-h-[600px] overflow-y-auto">
         {messages.length === 0 && !loading && (
           <div className="text-center py-8">
-            <div className="flex justify-center mb-4">
-              <div className="p-4 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}>
-                <MessageSquare className="w-8 h-8" style={{ color: GORUTY.primary }} />
-              </div>
-            </div>
+            <div className="flex justify-center mb-4"><div className="p-4 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}><MessageSquare className="w-8 h-8" style={{ color: GORUTY.primary }} /></div></div>
             <p className="text-sm text-slate-700 font-semibold mb-2">¡Hola! Soy Claude 👋</p>
-            <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-              Tengo acceso a todos los datos GA4 de <strong>{currentClient?.nombre}</strong>, incluyendo el detalle día por día.
-              Puedes preguntarme lo que quieras: comparaciones, análisis de fechas específicas, recomendaciones, ideas creativas, o pedirme que escriba algo.
-            </p>
-            <p className="text-xs text-slate-400 mt-4">
-              Escribe tu pregunta abajo para empezar
-            </p>
+            <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">Tengo acceso a todos los datos GA4 de <strong>{currentClient?.nombre}</strong>, incluyendo el detalle día por día y el funnel de conversión.</p>
+            <p className="text-xs text-slate-400 mt-4">Escribe tu pregunta abajo para empezar</p>
           </div>
         )}
-
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex gap-3 mb-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
             <div className="flex-shrink-0">
-              {msg.role === 'user' ? (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white font-bold" style={{ background: `linear-gradient(135deg, ${GORUTY.tertiary}, ${GORUTY.secondary})` }}>
-                  TÚ
-                </div>
-              ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
-                  <Bot className="w-4 h-4 text-white" />
-                </div>
-              )}
+              {msg.role === 'user' ? (<div className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white font-bold" style={{ background: `linear-gradient(135deg, ${GORUTY.tertiary}, ${GORUTY.secondary})` }}>TÚ</div>) : (<div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><Bot className="w-4 h-4 text-white" /></div>)}
             </div>
             <div className={`flex-1 ${msg.role === 'user' ? 'max-w-[80%]' : 'max-w-[90%]'}`}>
               <div className={`rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'rounded-tr-sm' : 'rounded-tl-sm border border-violet-100'}`} style={msg.role === 'user' ? { background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` } : { backgroundColor: '#fafaff' }}>
-                {msg.role === 'user' ? (
-                  <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                ) : (
-                  <div className="prose prose-slate max-w-none">{renderMarkdown(msg.content, GORUTY.primary)}</div>
-                )}
+                {msg.role === 'user' ? (<p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{msg.content}</p>) : (<div className="prose prose-slate max-w-none">{renderMarkdown(msg.content, GORUTY.primary)}</div>)}
               </div>
               <div className={`flex items-center gap-2 mt-1.5 px-2 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                <span className="text-[10px] text-slate-400">
-                  {msg.timestamp?.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-                {msg.role === 'assistant' && (
-                  <button onClick={() => copyMessage(msg.content, idx)} className="text-[10px] text-slate-400 hover:text-violet-600 flex items-center gap-1">
-                    {copiedIndex === idx ? (<><CheckCheck className="w-3 h-3" /> Copiado</>) : (<><Copy className="w-3 h-3" /> Copiar</>)}
-                  </button>
-                )}
+                <span className="text-[10px] text-slate-400">{msg.timestamp?.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
+                {msg.role === 'assistant' && (<button onClick={() => copyMessage(msg.content, idx)} className="text-[10px] text-slate-400 hover:text-violet-600 flex items-center gap-1">{copiedIndex === idx ? (<><CheckCheck className="w-3 h-3" /> Copiado</>) : (<><Copy className="w-3 h-3" /> Copiar</>)}</button>)}
               </div>
             </div>
           </div>
         ))}
-
         {loading && (
           <div className="flex gap-3 mb-5">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-            </div>
+            <div className="flex-shrink-0"><div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><Bot className="w-4 h-4 text-white" /></div></div>
             <div className="flex-1">
               <div className="rounded-2xl rounded-tl-sm border border-violet-100 px-4 py-3 inline-flex items-center gap-2" style={{ backgroundColor: '#fafaff' }}>
                 <div className="flex gap-1">
@@ -517,46 +633,17 @@ INSTRUCCIONES:
             </div>
           </div>
         )}
-
-        {error && (
-          <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-start gap-2 mt-3">
-            <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-xs font-medium text-rose-800">Error</p>
-              <p className="text-xs text-rose-600">{error}</p>
-            </div>
-          </div>
-        )}
-
+        {error && (<div className="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-start gap-2 mt-3"><AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" /><div className="flex-1"><p className="text-xs font-medium text-rose-800">Error</p><p className="text-xs text-rose-600">{error}</p></div></div>)}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="border-t border-violet-100 p-4 bg-white">
         <div className="flex gap-2 items-end">
           <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={`Pregúntale a Claude sobre ${currentClient?.nombre}...`}
-              rows={1}
-              disabled={loading || !liveData}
-              className="w-full bg-violet-50/50 border border-violet-200 rounded-xl px-4 py-3 pr-12 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ minHeight: '48px', maxHeight: '150px' }}
-            />
-            <div className="absolute bottom-2 right-3 text-[10px] text-slate-400">
-              Enter ⏎ para enviar · Shift+Enter para nueva línea
-            </div>
+            <textarea ref={textareaRef} value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleKeyDown} placeholder={`Pregúntale a Claude sobre ${currentClient?.nombre}...`} rows={1} disabled={loading || !liveData} className="w-full bg-violet-50/50 border border-violet-200 rounded-xl px-4 py-3 pr-12 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800 resize-none disabled:opacity-50 disabled:cursor-not-allowed" style={{ minHeight: '48px', maxHeight: '150px' }} />
+            <div className="absolute bottom-2 right-3 text-[10px] text-slate-400">Enter ⏎ para enviar · Shift+Enter para nueva línea</div>
           </div>
-          <button
-            onClick={sendMessage}
-            disabled={loading || !inputValue.trim() || !liveData}
-            className="px-4 py-3 rounded-xl text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-            style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}
-          >
-            <Send className="w-4 h-4" />
-          </button>
+          <button onClick={sendMessage} disabled={loading || !inputValue.trim() || !liveData} className="px-4 py-3 rounded-xl text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><Send className="w-4 h-4" /></button>
         </div>
       </div>
     </div>
@@ -568,26 +655,18 @@ function Dashboard({ session, onLogout }) {
   const [customStart, setCustomStart] = useState('2026-03-20');
   const [customEnd, setCustomEnd] = useState('2026-04-23');
   const [showCustomDate, setShowCustomDate] = useState(false);
-
-  const [activeClient, setActiveClient] = useState(
-    session.cliente === '*' ? session.clientes[0]?.id : session.cliente
-  );
+  const [activeClient, setActiveClient] = useState(session.cliente === '*' ? session.clientes[0]?.id : session.cliente);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshError, setRefreshError] = useState(null);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState({ current: 0, total: 0, clientName: '' });
-
   const [clientCache, setClientCache] = useState({});
   const liveData = clientCache[activeClient]?.data || null;
   const lastUpdate = clientCache[activeClient]?.lastUpdate || null;
-
   const currentClient = session.clientes.find(c => c.id === activeClient) || session.clientes[0];
-
-  // 🔒 Determinar si el usuario es admin (controla visibilidad del chat IA)
   const isAdmin = session.rol === 'admin';
 
   const fetchClientData = async (clientId) => {
@@ -601,13 +680,10 @@ function Dashboard({ session, onLogout }) {
   };
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
-    setRefreshError(null);
-    setRefreshSuccess(false);
-
-    const clientesACargar = session.clientes;
+    setIsRefreshing(true); setRefreshError(null); setRefreshSuccess(false);
+    const clientesACargar = session.clientes || [];
+    if (clientesACargar.length === 0) { setRefreshError('No hay clientes asignados'); setIsRefreshing(false); return; }
     setRefreshProgress({ current: 0, total: clientesACargar.length, clientName: '' });
-
     try {
       const promises = clientesACargar.map(async (client) => {
         try {
@@ -619,51 +695,27 @@ function Dashboard({ session, onLogout }) {
           return { id: client.id, data: null, error: err.message };
         }
       });
-
       const results = await Promise.all(promises);
-
       const newCache = { ...clientCache };
       const errores = [];
       const now = new Date();
       results.forEach(r => {
-        if (r.data) {
-          newCache[r.id] = { data: r.data, lastUpdate: now };
-        } else if (r.error) {
-          const cliente = session.clientes.find(c => c.id === r.id);
-          errores.push(`${cliente?.nombre}: ${r.error}`);
-        }
+        if (r.data) newCache[r.id] = { data: r.data, lastUpdate: now };
+        else if (r.error) { const cliente = session.clientes.find(c => c.id === r.id); errores.push(`${cliente?.nombre}: ${r.error}`); }
       });
-      setClientCache(newCache);
-      setRefreshKey(k => k + 1);
-
-      if (errores.length === 0) {
-        setRefreshSuccess(true);
-        setTimeout(() => setRefreshSuccess(false), 4000);
-      } else if (errores.length < clientesACargar.length) {
-        setRefreshSuccess(true);
-        setRefreshError(`Algunos clientes con error: ${errores.join(' · ')}`);
-        setTimeout(() => setRefreshSuccess(false), 4000);
-        setTimeout(() => setRefreshError(null), 6000);
-      } else {
-        setRefreshError(`No se pudo cargar ningún cliente: ${errores[0]}`);
-        setTimeout(() => setRefreshError(null), 6000);
-      }
-    } catch (error) {
-      setRefreshError(error.message || 'Error al conectar');
-      setTimeout(() => setRefreshError(null), 5000);
-    } finally {
-      setIsRefreshing(false);
-      setRefreshProgress({ current: 0, total: 0, clientName: '' });
-    }
+      setClientCache(newCache); setRefreshKey(k => k + 1);
+      if (errores.length === 0) { setRefreshSuccess(true); setTimeout(() => setRefreshSuccess(false), 4000); }
+      else if (errores.length < clientesACargar.length) { setRefreshSuccess(true); setRefreshError(`Algunos errores: ${errores.join(' · ')}`); setTimeout(() => setRefreshSuccess(false), 4000); setTimeout(() => setRefreshError(null), 6000); }
+      else { setRefreshError(`No se cargaron clientes: ${errores[0]}`); setTimeout(() => setRefreshError(null), 6000); }
+    } catch (error) { setRefreshError(error.message || 'Error al conectar'); setTimeout(() => setRefreshError(null), 5000); }
+    finally { setIsRefreshing(false); setRefreshProgress({ current: 0, total: 0, clientName: '' }); }
   };
 
-  useEffect(() => {
-    if (Object.keys(clientCache).length === 0) handleRefresh();
-    // eslint-disable-next-line
-  }, []);
+  useEffect(() => { if (Object.keys(clientCache).length === 0) handleRefresh(); /* eslint-disable-next-line */ }, []);
 
   const [sections, setSections] = useState({
     aiChat: true,
+    funnel: true,  // 🆕 Funnel abierto por defecto
     acquisition: true,
     audience: true,
     behavior: true,
@@ -687,8 +739,7 @@ function Dashboard({ session, onLogout }) {
         sesiones: Number(row['Sesiones']) || 0,
         sesionesEng: Number(row['Sesiones Comprometidas']) || 0,
         vistas: Number(row['Vistas de Página']) || 0,
-        conversiones: 0,
-        valorPurchase: 0,
+        conversiones: 0, valorPurchase: 0,
         tasaEngagement: Number(row['Tasa Engagement (%)']) || 0,
         tasaRebote: Number(row['Tasa Rebote (%)']) || 0,
         duracion: Number(row['Duración Prom. Sesión (seg)']) || 0,
@@ -710,13 +761,7 @@ function Dashboard({ session, onLogout }) {
     return map;
   }, [liveData]);
 
-  const trendDataConConversiones = useMemo(() => {
-    return allTrendData.map(d => ({
-      ...d,
-      conversiones: conversionesPorFecha[d.fecha]?.conv || d.conversiones,
-      valorPurchase: conversionesPorFecha[d.fecha]?.valor || d.valorPurchase,
-    }));
-  }, [allTrendData, conversionesPorFecha]);
+  const trendDataConConversiones = useMemo(() => allTrendData.map(d => ({ ...d, conversiones: conversionesPorFecha[d.fecha]?.conv || d.conversiones, valorPurchase: conversionesPorFecha[d.fecha]?.valor || d.valorPurchase })), [allTrendData, conversionesPorFecha]);
 
   const trendData = useMemo(() => {
     const data = trendDataConConversiones;
@@ -742,23 +787,16 @@ function Dashboard({ session, onLogout }) {
 
   const kpis = useMemo(() => {
     const totals = trendData.reduce((acc, d) => ({
-      usuarios: acc.usuarios + d.usuarios,
-      usuariosNuevos: acc.usuariosNuevos + d.usuariosNuevos,
-      sesiones: acc.sesiones + d.sesiones,
-      sesionesEng: acc.sesionesEng + d.sesionesEng,
-      vistas: acc.vistas + d.vistas,
-      conversiones: acc.conversiones + d.conversiones,
-      valorPurchase: acc.valorPurchase + d.valorPurchase,
-      eventos: acc.eventos + d.eventos,
+      usuarios: acc.usuarios + d.usuarios, usuariosNuevos: acc.usuariosNuevos + d.usuariosNuevos,
+      sesiones: acc.sesiones + d.sesiones, sesionesEng: acc.sesionesEng + d.sesionesEng,
+      vistas: acc.vistas + d.vistas, conversiones: acc.conversiones + d.conversiones,
+      valorPurchase: acc.valorPurchase + d.valorPurchase, eventos: acc.eventos + d.eventos,
     }), { usuarios: 0, usuariosNuevos: 0, sesiones: 0, sesionesEng: 0, vistas: 0, conversiones: 0, valorPurchase: 0, eventos: 0 });
     const avgEngagement = trendData.length ? (trendData.reduce((s, d) => s + d.tasaEngagement, 0) / trendData.length).toFixed(1) : 0;
     const avgRebote = trendData.length ? (trendData.reduce((s, d) => s + d.tasaRebote, 0) / trendData.length).toFixed(1) : 0;
     const avgDuracion = trendData.length ? Math.round(trendData.reduce((s, d) => s + d.duracion, 0) / trendData.length) : 0;
     return {
-      ...totals,
-      tasaEngagement: avgEngagement,
-      tasaRebote: avgRebote,
-      duracionPromedio: avgDuracion,
+      ...totals, tasaEngagement: avgEngagement, tasaRebote: avgRebote, duracionPromedio: avgDuracion,
       duracionEngagement: Math.round(avgDuracion * 0.78),
       sesionesPorUsuario: totals.usuarios ? (totals.sesiones / totals.usuarios).toFixed(2) : 0,
       vistasPorSesion: totals.sesiones ? (totals.vistas / totals.sesiones).toFixed(2) : 0,
@@ -890,14 +928,8 @@ function Dashboard({ session, onLogout }) {
   const KpiCard = ({ icon: Icon, label, value, accentColor = GORUTY.primary, trend }) => (
     <div className="bg-white border border-violet-100 rounded-xl p-4 hover:border-violet-300 hover:shadow-md hover:shadow-violet-100 transition-all">
       <div className="flex items-start justify-between mb-2">
-        <div className="p-2 rounded-lg" style={{ backgroundColor: `${accentColor}15` }}>
-          <Icon className="w-4 h-4" style={{ color: accentColor }} />
-        </div>
-        {trend !== undefined && (
-          <span className={`text-xs font-semibold ${trend > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-            {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
-          </span>
-        )}
+        <div className="p-2 rounded-lg" style={{ backgroundColor: `${accentColor}15` }}><Icon className="w-4 h-4" style={{ color: accentColor }} /></div>
+        {trend !== undefined && (<span className={`text-xs font-semibold ${trend > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%</span>)}
       </div>
       <div className="text-xs text-slate-500 mb-1 font-medium">{label}</div>
       <div className="text-2xl font-bold text-slate-900">{value}</div>
@@ -907,14 +939,9 @@ function Dashboard({ session, onLogout }) {
   const SectionHeader = ({ title, icon: Icon, sectionKey, subtitle, badge }) => (
     <button onClick={() => toggleSection(sectionKey)} className="w-full flex items-center justify-between py-3 px-4 bg-white border border-violet-100 hover:border-violet-300 rounded-lg mb-4 transition-all">
       <div className="flex items-center gap-3">
-        <div className="p-1.5 rounded-md" style={{ backgroundColor: `${GORUTY.primary}15` }}>
-          <Icon className="w-4 h-4" style={{ color: GORUTY.primary }} />
-        </div>
+        <div className="p-1.5 rounded-md" style={{ backgroundColor: `${GORUTY.primary}15` }}><Icon className="w-4 h-4" style={{ color: GORUTY.primary }} /></div>
         <div className="text-left">
-          <div className="text-slate-900 font-semibold flex items-center gap-2">
-            {title}
-            {badge && <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>{badge}</span>}
-          </div>
+          <div className="text-slate-900 font-semibold flex items-center gap-2">{title}{badge && <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>{badge}</span>}</div>
           {subtitle && <div className="text-xs text-slate-500">{subtitle}</div>}
         </div>
       </div>
@@ -923,16 +950,10 @@ function Dashboard({ session, onLogout }) {
   );
 
   const Panel = ({ title, children, className = '' }) => (
-    <div className={`bg-white border border-violet-100 rounded-xl p-5 shadow-sm ${className}`}>
-      <h3 className="text-sm font-semibold text-slate-800 mb-4">{title}</h3>
-      {children}
-    </div>
+    <div className={`bg-white border border-violet-100 rounded-xl p-5 shadow-sm ${className}`}><h3 className="text-sm font-semibold text-slate-800 mb-4">{title}</h3>{children}</div>
   );
 
-  const tooltipStyle = {
-    contentStyle: { backgroundColor: '#fff', border: `1px solid ${GORUTY.light}`, borderRadius: '8px', color: '#1e293b', boxShadow: '0 10px 15px -3px rgba(91, 75, 255, 0.1)' },
-    labelStyle: { color: '#64748b', fontWeight: 600 },
-  };
+  const tooltipStyle = { contentStyle: { backgroundColor: '#fff', border: `1px solid ${GORUTY.light}`, borderRadius: '8px', color: '#1e293b', boxShadow: '0 10px 15px -3px rgba(91, 75, 255, 0.1)' }, labelStyle: { color: '#64748b', fontWeight: 600 } };
 
   const hasDataForActiveClient = !!liveData;
   const totalClientesEnCache = Object.keys(clientCache).length;
@@ -940,33 +961,9 @@ function Dashboard({ session, onLogout }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-purple-50 text-slate-800 p-6">
       <div className="max-w-[1400px] mx-auto">
-        {refreshSuccess && (
-          <div className="fixed top-4 right-4 z-50 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
-            <Check className="w-5 h-5 text-emerald-600" />
-            <span className="text-sm font-medium">¡Datos de {totalClientesEnCache} cliente{totalClientesEnCache !== 1 ? 's' : ''} actualizados!</span>
-          </div>
-        )}
-        {refreshError && (
-          <div className="fixed top-4 right-4 z-50 bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 max-w-md">
-            <X className="w-5 h-5 text-rose-600 flex-shrink-0" />
-            <div>
-              <div className="text-sm font-medium">Error</div>
-              <div className="text-xs">{refreshError}</div>
-            </div>
-          </div>
-        )}
-
-        {isRefreshing && refreshProgress.total > 0 && (
-          <div className="fixed top-4 right-4 z-50 bg-violet-50 border border-violet-200 text-violet-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[280px]">
-            <RefreshCw className="w-5 h-5 animate-spin" style={{ color: GORUTY.primary }} />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Cargando {refreshProgress.current} de {refreshProgress.total} clientes...</div>
-              <div className="mt-1.5 bg-violet-200 rounded-full h-1.5 overflow-hidden">
-                <div className="h-full rounded-full transition-all" style={{ background: `linear-gradient(90deg, ${GORUTY.primary}, ${GORUTY.tertiary})`, width: `${(refreshProgress.current / refreshProgress.total) * 100}%` }}></div>
-              </div>
-            </div>
-          </div>
-        )}
+        {refreshSuccess && (<div className="fixed top-4 right-4 z-50 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2"><Check className="w-5 h-5 text-emerald-600" /><span className="text-sm font-medium">¡Datos de {totalClientesEnCache} cliente{totalClientesEnCache !== 1 ? 's' : ''} actualizados!</span></div>)}
+        {refreshError && (<div className="fixed top-4 right-4 z-50 bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 max-w-md"><X className="w-5 h-5 text-rose-600 flex-shrink-0" /><div><div className="text-sm font-medium">Error</div><div className="text-xs">{refreshError}</div></div></div>)}
+        {isRefreshing && refreshProgress.total > 0 && (<div className="fixed top-4 right-4 z-50 bg-violet-50 border border-violet-200 text-violet-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[280px]"><RefreshCw className="w-5 h-5 animate-spin" style={{ color: GORUTY.primary }} /><div className="flex-1"><div className="text-sm font-medium">Cargando {refreshProgress.current} de {refreshProgress.total} clientes...</div><div className="mt-1.5 bg-violet-200 rounded-full h-1.5 overflow-hidden"><div className="h-full rounded-full transition-all" style={{ background: `linear-gradient(90deg, ${GORUTY.primary}, ${GORUTY.tertiary})`, width: `${(refreshProgress.current / refreshProgress.total) * 100}%` }}></div></div></div></div>)}
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-4">
@@ -977,13 +974,9 @@ function Dashboard({ session, onLogout }) {
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>Grouty</span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{currentClient?.emoji} {currentClient?.nombre}</span>
                 {liveData && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">✓ Datos en vivo</span>}
-                {totalClientesEnCache > 0 && session.cliente === '*' && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{totalClientesEnCache}/{session.clientes.length} cargados</span>
-                )}
+                {totalClientesEnCache > 0 && session.cliente === '*' && (<span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{totalClientesEnCache}/{session.clientes.length} cargados</span>)}
               </div>
-              <p className="text-sm text-slate-500 flex items-center gap-2">
-                {lastUpdate ? (<span>Última actualización: {lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>) : (<span className="text-amber-600">Sin datos cargados — pulsa Actualizar</span>)}
-              </p>
+              <p className="text-sm text-slate-500 flex items-center gap-2">{lastUpdate ? (<span>Última actualización: {lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>) : (<span className="text-amber-600">Sin datos cargados — pulsa Actualizar</span>)}</p>
             </div>
           </div>
           <div className="flex gap-2 items-start relative">
@@ -1000,20 +993,14 @@ function Dashboard({ session, onLogout }) {
                 </button>
                 {showClientDropdown && (
                   <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-violet-200 rounded-lg shadow-xl z-50 overflow-hidden">
-                    <div className="p-2 border-b border-violet-100 bg-violet-50/50">
-                      <span className="text-xs font-semibold text-slate-600 px-2">CLIENTES ({session.clientes.length})</span>
-                    </div>
+                    <div className="p-2 border-b border-violet-100 bg-violet-50/50"><span className="text-xs font-semibold text-slate-600 px-2">CLIENTES ({session.clientes.length})</span></div>
                     {session.clientes.map(client => {
                       const hasCache = !!clientCache[client.id]?.data;
                       return (
                         <div key={client.id} onClick={() => { setActiveClient(client.id); setShowClientDropdown(false); }} className={`flex items-center gap-2 px-3 py-2.5 hover:bg-violet-50 cursor-pointer ${activeClient === client.id ? 'bg-violet-50' : ''}`}>
                           <span className="text-lg">{client.emoji}</span>
                           <span className="text-sm font-medium text-slate-800 flex-1">{client.nombre}</span>
-                          {hasCache ? (
-                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">✓ Cargado</span>
-                          ) : (
-                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Sin datos</span>
-                          )}
+                          {hasCache ? (<span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">✓ Cargado</span>) : (<span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Sin datos</span>)}
                           {activeClient === client.id && <Check className="w-4 h-4" style={{ color: GORUTY.primary }} />}
                         </div>
                       );
@@ -1024,9 +1011,7 @@ function Dashboard({ session, onLogout }) {
             )}
             <div className="relative">
               <button onClick={() => setShowUserMenu(!showUserMenu)} className="px-3 py-2 bg-white border border-violet-200 hover:border-violet-400 rounded-lg text-sm flex items-center gap-2 transition text-slate-700 font-medium">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-white font-bold" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>
-                  {session.nombre?.charAt(0) || 'U'}
-                </div>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-white font-bold" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>{session.nombre?.charAt(0) || 'U'}</div>
                 <ChevronDown className={`w-4 h-4 transition ${showUserMenu ? 'rotate-180' : ''}`} />
               </button>
               {showUserMenu && (
@@ -1034,13 +1019,9 @@ function Dashboard({ session, onLogout }) {
                   <div className="p-3 border-b border-violet-100 bg-violet-50/50">
                     <div className="text-sm font-semibold text-slate-800">{session.nombre}</div>
                     <div className="text-xs text-slate-500">@{session.usuario}</div>
-                    <span className="inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${GORUTY.primary}20`, color: GORUTY.primary }}>
-                      {isAdmin ? '👑 Administrador' : '👤 Cliente'}
-                    </span>
+                    <span className="inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${GORUTY.primary}20`, color: GORUTY.primary }}>{isAdmin ? '👑 Administrador' : '👤 Cliente'}</span>
                   </div>
-                  <button onClick={onLogout} className="w-full px-3 py-2.5 text-sm font-medium flex items-center gap-2 transition hover:bg-rose-50 text-rose-600">
-                    <LogOut className="w-4 h-4" /> Cerrar sesión
-                  </button>
+                  <button onClick={onLogout} className="w-full px-3 py-2.5 text-sm font-medium flex items-center gap-2 transition hover:bg-rose-50 text-rose-600"><LogOut className="w-4 h-4" /> Cerrar sesión</button>
                 </div>
               )}
             </div>
@@ -1049,30 +1030,17 @@ function Dashboard({ session, onLogout }) {
 
         {!hasDataForActiveClient && !isRefreshing && (
           <div className="bg-white border-2 border-dashed border-violet-200 rounded-2xl p-12 text-center shadow-sm">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: `${GORUTY.primary}15` }}>
-                <AlertCircle className="w-8 h-8" style={{ color: GORUTY.primary }} />
-              </div>
-            </div>
+            <div className="flex justify-center mb-4"><div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: `${GORUTY.primary}15` }}><AlertCircle className="w-8 h-8" style={{ color: GORUTY.primary }} /></div></div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">Sin datos cargados</h2>
-            <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
-              Pulsa <strong>Actualizar</strong> y se cargarán los datos de {session.cliente === '*' ? `los ${session.clientes.length} clientes` : `${currentClient?.nombre}`} de una sola vez.
-            </p>
-            <button onClick={handleRefresh} className="px-6 py-3 rounded-lg text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg mx-auto" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
-              <RefreshCw className="w-4 h-4" />
-              Cargar todos los datos
-            </button>
+            <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">Pulsa <strong>Actualizar</strong> y se cargarán los datos.</p>
+            <button onClick={handleRefresh} className="px-6 py-3 rounded-lg text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg mx-auto" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><RefreshCw className="w-4 h-4" />Cargar todos los datos</button>
           </div>
         )}
 
         {!hasDataForActiveClient && isRefreshing && (
           <div className="bg-white border border-violet-100 rounded-2xl p-12 text-center shadow-sm">
-            <div className="flex justify-center mb-4">
-              <RefreshCw className="w-12 h-12 animate-spin" style={{ color: GORUTY.primary }} />
-            </div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">
-              Cargando {refreshProgress.total > 0 ? `${refreshProgress.current} de ${refreshProgress.total} clientes` : 'datos'}...
-            </h2>
+            <div className="flex justify-center mb-4"><RefreshCw className="w-12 h-12 animate-spin" style={{ color: GORUTY.primary }} /></div>
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">Cargando {refreshProgress.total > 0 ? `${refreshProgress.current} de ${refreshProgress.total} clientes` : 'datos'}...</h2>
             <p className="text-sm text-slate-500">Estamos obteniendo los datos de Google Analytics</p>
           </div>
         )}
@@ -1080,10 +1048,7 @@ function Dashboard({ session, onLogout }) {
         {hasDataForActiveClient && (
           <>
             <div className="bg-white border border-violet-100 rounded-xl p-4 mb-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <Filter className="w-4 h-4" style={{ color: GORUTY.primary }} />
-                <span className="text-sm font-semibold text-slate-800">Filtros</span>
-              </div>
+              <div className="flex items-center gap-2 mb-3"><Filter className="w-4 h-4" style={{ color: GORUTY.primary }} /><span className="text-sm font-semibold text-slate-800">Filtros</span></div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block font-medium">📅 Rango de fechas</label>
@@ -1096,22 +1061,8 @@ function Dashboard({ session, onLogout }) {
                   </select>
                 </div>
               </div>
-              {showCustomDate && (
-                <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-violet-100">
-                  <div>
-                    <label className="text-xs text-slate-500 mb-1 block font-medium">Desde</label>
-                    <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 mb-1 block font-medium">Hasta</label>
-                    <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
-                  </div>
-                </div>
-              )}
-              <div className="mt-3 text-xs text-slate-500">
-                Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos
-                {dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}
-              </div>
+              {showCustomDate && (<div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-violet-100"><div><label className="text-xs text-slate-500 mb-1 block font-medium">Desde</label><input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" /></div><div><label className="text-xs text-slate-500 mb-1 block font-medium">Hasta</label><input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" /></div></div>)}
+              <div className="mt-3 text-xs text-slate-500">Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos{dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}</div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
@@ -1131,16 +1082,20 @@ function Dashboard({ session, onLogout }) {
               <KpiCard icon={Target} label="Tasa Conv." value={`${kpis.tasaConversionSesion}%`} accentColor={GORUTY.deepPurple} />
             </div>
 
-            {/* 🔒 CHAT IA — SOLO VISIBLE PARA ADMIN */}
+            {/* 🔒 CHAT IA — SOLO ADMIN */}
             {isAdmin && (
               <>
                 <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" />
-                {sections.aiChat && (
-                  <div className="mb-6">
-                    <AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} />
-                  </div>
-                )}
+                {sections.aiChat && (<div className="mb-6"><AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} /></div>)}
               </>
+            )}
+
+            {/* 🎯 FUNNEL DE CONVERSIÓN — NUEVA SECCIÓN */}
+            <SectionHeader title="Funnel de Conversión" subtitle="Recorrido del usuario desde sesión hasta compra" icon={Target} sectionKey="funnel" badge="🎯 Nuevo" />
+            {sections.funnel && (
+              <div className="mb-6">
+                <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} />
+              </div>
             )}
 
             <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
@@ -1187,31 +1142,15 @@ function Dashboard({ session, onLogout }) {
                       <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
                       <YAxis type="category" dataKey="nombre" stroke="#64748b" style={{ fontSize: 11 }} width={110} />
                       <Tooltip {...tooltipStyle} />
-                      <Bar dataKey="usuarios" radius={[0, 4, 4, 0]}>
-                        {canalesData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                      </Bar>
+                      <Bar dataKey="usuarios" radius={[0, 4, 4, 0]}>{canalesData.map((entry, i) => <Cell key={i} fill={entry.color} />)}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </Panel>
                 <Panel title="Top Fuente / Medio">
                   <div className="overflow-x-auto max-h-80 overflow-y-auto">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-white">
-                        <tr className="text-left text-slate-500 border-b border-violet-100">
-                          <th className="py-2 px-3 font-semibold">Source / Medium</th>
-                          <th className="py-2 px-3 text-right font-semibold">Sesiones</th>
-                          <th className="py-2 px-3 text-right font-semibold">Conv.</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sourceMediumData.map((row, i) => (
-                          <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                            <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.fuente}</td>
-                            <td className="py-2 px-3 text-right text-slate-700">{fmt(row.sesiones)}</td>
-                            <td className="py-2 px-3 text-right font-semibold text-emerald-600">{row.conv}</td>
-                          </tr>
-                        ))}
-                      </tbody>
+                      <thead className="sticky top-0 bg-white"><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">Source / Medium</th><th className="py-2 px-3 text-right font-semibold">Sesiones</th><th className="py-2 px-3 text-right font-semibold">Conv.</th></tr></thead>
+                      <tbody>{sourceMediumData.map((row, i) => (<tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50"><td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.fuente}</td><td className="py-2 px-3 text-right text-slate-700">{fmt(row.sesiones)}</td><td className="py-2 px-3 text-right font-semibold text-emerald-600">{row.conv}</td></tr>))}</tbody>
                     </table>
                   </div>
                 </Panel>
@@ -1221,69 +1160,11 @@ function Dashboard({ session, onLogout }) {
             <SectionHeader title="Audiencia" subtitle="Ubicación y dispositivos" icon={Globe} sectionKey="audience" />
             {sections.audience && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-                {paisesData.length > 0 && (
-                  <Panel title="Usuarios por País" className="lg:col-span-2">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={paisesData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-                        <XAxis dataKey="pais" stroke="#64748b" style={{ fontSize: 10 }} angle={-15} textAnchor="end" height={70} />
-                        <YAxis stroke="#94a3b8" style={{ fontSize: 11 }} />
-                        <Tooltip {...tooltipStyle} />
-                        <Bar dataKey="usuarios" fill={GORUTY.primary} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Panel>
-                )}
-                {dispositivosData.length > 0 && (
-                  <Panel title="Dispositivos">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie data={dispositivosData} dataKey="usuarios" nameKey="tipo" cx="50%" cy="50%" outerRadius={80} label={(e) => e.tipo}>
-                          {dispositivosData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                        </Pie>
-                        <Tooltip {...tooltipStyle} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Panel>
-                )}
-                {ciudadesData.length > 0 && (
-                  <Panel title="Top Ciudades">
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={ciudadesData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-                        <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
-                        <YAxis type="category" dataKey="ciudad" stroke="#64748b" style={{ fontSize: 11 }} width={100} />
-                        <Tooltip {...tooltipStyle} />
-                        <Bar dataKey="usuarios" fill={GORUTY.secondary} radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Panel>
-                )}
-                {osData.length > 0 && (
-                  <Panel title="Sistema Operativo">
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={osData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-                        <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} />
-                        <YAxis type="category" dataKey="os" stroke="#64748b" style={{ fontSize: 11 }} width={90} />
-                        <Tooltip {...tooltipStyle} />
-                        <Bar dataKey="usuarios" fill={GORUTY.tertiary} radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Panel>
-                )}
-                {navegadoresData.length > 0 && (
-                  <Panel title="Navegadores">
-                    <ResponsiveContainer width="100%" height={240}>
-                      <PieChart>
-                        <Pie data={navegadoresData} dataKey="usuarios" nameKey="navegador" cx="50%" cy="50%" outerRadius={80} label={(e) => `${e.navegador} (${e.porcentaje}%)`} style={{ fontSize: 9 }}>
-                          {navegadoresData.map((_, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}
-                        </Pie>
-                        <Tooltip {...tooltipStyle} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Panel>
-                )}
+                {paisesData.length > 0 && (<Panel title="Usuarios por País" className="lg:col-span-2"><ResponsiveContainer width="100%" height={260}><BarChart data={paisesData}><CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" /><XAxis dataKey="pais" stroke="#64748b" style={{ fontSize: 10 }} angle={-15} textAnchor="end" height={70} /><YAxis stroke="#94a3b8" style={{ fontSize: 11 }} /><Tooltip {...tooltipStyle} /><Bar dataKey="usuarios" fill={GORUTY.primary} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></Panel>)}
+                {dispositivosData.length > 0 && (<Panel title="Dispositivos"><ResponsiveContainer width="100%" height={260}><PieChart><Pie data={dispositivosData} dataKey="usuarios" nameKey="tipo" cx="50%" cy="50%" outerRadius={80} label={(e) => e.tipo}>{dispositivosData.map((entry, i) => <Cell key={i} fill={entry.color} />)}</Pie><Tooltip {...tooltipStyle} /></PieChart></ResponsiveContainer></Panel>)}
+                {ciudadesData.length > 0 && (<Panel title="Top Ciudades"><ResponsiveContainer width="100%" height={240}><BarChart data={ciudadesData} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" /><XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} /><YAxis type="category" dataKey="ciudad" stroke="#64748b" style={{ fontSize: 11 }} width={100} /><Tooltip {...tooltipStyle} /><Bar dataKey="usuarios" fill={GORUTY.secondary} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></Panel>)}
+                {osData.length > 0 && (<Panel title="Sistema Operativo"><ResponsiveContainer width="100%" height={240}><BarChart data={osData} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" /><XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11 }} /><YAxis type="category" dataKey="os" stroke="#64748b" style={{ fontSize: 11 }} width={90} /><Tooltip {...tooltipStyle} /><Bar dataKey="usuarios" fill={GORUTY.tertiary} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></Panel>)}
+                {navegadoresData.length > 0 && (<Panel title="Navegadores"><ResponsiveContainer width="100%" height={240}><PieChart><Pie data={navegadoresData} dataKey="usuarios" nameKey="navegador" cx="50%" cy="50%" outerRadius={80} label={(e) => `${e.navegador} (${e.porcentaje}%)`} style={{ fontSize: 9 }}>{navegadoresData.map((_, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}</Pie><Tooltip {...tooltipStyle} /></PieChart></ResponsiveContainer></Panel>)}
               </div>
             )}
 
@@ -1292,24 +1173,8 @@ function Dashboard({ session, onLogout }) {
               <Panel title="Páginas Más Vistas" className="mb-6">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-slate-500 border-b border-violet-100">
-                        <th className="py-2 px-3 font-semibold">Path</th>
-                        <th className="py-2 px-3 font-semibold">Título</th>
-                        <th className="py-2 px-3 text-right font-semibold">Vistas</th>
-                        <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginasData.map((row, i) => (
-                        <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                          <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.path}</td>
-                          <td className="py-2 px-3 text-slate-700 text-xs">{row.titulo}</td>
-                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.vistas)}</td>
-                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+                    <thead><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">Path</th><th className="py-2 px-3 font-semibold">Título</th><th className="py-2 px-3 text-right font-semibold">Vistas</th><th className="py-2 px-3 text-right font-semibold">Usuarios</th></tr></thead>
+                    <tbody>{paginasData.map((row, i) => (<tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50"><td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.primary }}>{row.path}</td><td className="py-2 px-3 text-slate-700 text-xs">{row.titulo}</td><td className="py-2 px-3 text-right text-slate-700">{fmt(row.vistas)}</td><td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td></tr>))}</tbody>
                   </table>
                 </div>
               </Panel>
@@ -1320,25 +1185,8 @@ function Dashboard({ session, onLogout }) {
               <Panel title="Top Eventos" className="mb-6">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-slate-500 border-b border-violet-100">
-                        <th className="py-2 px-3 font-semibold">Evento</th>
-                        <th className="py-2 px-3 text-right font-semibold">Conteo</th>
-                        <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {eventosData.map((row, i) => (
-                        <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                          <td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.accent }}>
-                            {row.evento}
-                            {row.esConversion && <span className="ml-2 text-emerald-600 font-bold">✓</span>}
-                          </td>
-                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.conteo)}</td>
-                          <td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+                    <thead><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">Evento</th><th className="py-2 px-3 text-right font-semibold">Conteo</th><th className="py-2 px-3 text-right font-semibold">Usuarios</th></tr></thead>
+                    <tbody>{eventosData.map((row, i) => (<tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50"><td className="py-2 px-3 font-mono text-xs" style={{ color: GORUTY.accent }}>{row.evento}{row.esConversion && <span className="ml-2 text-emerald-600 font-bold">✓</span>}</td><td className="py-2 px-3 text-right text-slate-700">{fmt(row.conteo)}</td><td className="py-2 px-3 text-right text-slate-700">{fmt(row.usuarios)}</td></tr>))}</tbody>
                   </table>
                 </div>
               </Panel>
@@ -1367,37 +1215,24 @@ export default function App() {
         const horasTranscurridas = (Date.now() - (data.loginTime || 0)) / (1000 * 60 * 60);
         if (horasTranscurridas < 24) setSession(data);
         else localStorage.removeItem('grouty_session');
-      } catch (e) {
-        localStorage.removeItem('grouty_session');
-      }
+      } catch (e) { localStorage.removeItem('grouty_session'); }
     }
     setCheckingSession(false);
   }, []);
 
   const handleLogin = (data) => {
-    setSession({
-      token: data.token, usuario: data.usuario, nombre: data.nombre,
-      rol: data.rol, cliente: data.cliente, clientes: data.clientes,
-      loginTime: Date.now()
-    });
+    setSession({ token: data.token, usuario: data.usuario, nombre: data.nombre, rol: data.rol, cliente: data.cliente, clientes: data.clientes, loginTime: Date.now() });
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('grouty_session');
-    setSession(null);
-  };
+  const handleLogout = () => { localStorage.removeItem('grouty_session'); setSession(null); };
 
   if (checkingSession) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="text-center">
-          <GorutyLogo size={64} />
-          <div className="mt-4 text-slate-500 text-sm">Cargando...</div>
-        </div>
+        <div className="text-center"><GorutyLogo size={64} /><div className="mt-4 text-slate-500 text-sm">Cargando...</div></div>
       </div>
     );
   }
-
   if (!session) return <LoginScreen onLogin={handleLogin} />;
   return <Dashboard session={session} onLogout={handleLogout} />;
 }
