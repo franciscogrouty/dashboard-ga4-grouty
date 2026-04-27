@@ -1090,14 +1090,6 @@ function Dashboard({ session, onLogout }) {
               </>
             )}
 
-            {/* 🎯 FUNNEL DE CONVERSIÓN — NUEVA SECCIÓN */}
-            <SectionHeader title="Funnel de Conversión" subtitle="Recorrido del usuario desde sesión hasta compra" icon={Target} sectionKey="funnel" badge="🎯 Nuevo" />
-            {sections.funnel && (
-              <div className="mb-6">
-                <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} />
-              </div>
-            )}
-
             <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
               <ResponsiveContainer width="100%" height={320}>
                 <ComposedChart data={trendData}>
@@ -1131,6 +1123,14 @@ function Dashboard({ session, onLogout }) {
                 </LineChart>
               </ResponsiveContainer>
             </Panel>
+
+            {/* 🎯 FUNNEL DE CONVERSIÓN — MOVIDO AQUÍ (después de los gráficos de tendencia) */}
+            <SectionHeader title="Funnel de Conversión" subtitle="Recorrido del usuario desde sesión hasta compra" icon={Target} sectionKey="funnel" badge="🎯 Nuevo" />
+            {sections.funnel && (
+              <div className="mb-6">
+                <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} />
+              </div>
+            )}
 
             <SectionHeader title="Adquisición" subtitle="Canales y fuentes" icon={TrendingUp} sectionKey="acquisition" />
             {sections.acquisition && canalesData.length > 0 && (
