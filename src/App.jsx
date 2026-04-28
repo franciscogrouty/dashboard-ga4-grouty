@@ -669,77 +669,86 @@ function SEOSection({ liveData, currentClient }) {
 // =============================================
 // 🎯 FUNNEL DE CONVERSIÓN — NUEVO COMPONENTE
 // =============================================
-function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
+function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange, trendData }) {
+  const [hoveredStep, setHoveredStep] = useState(null);
+
   const funnelData = useMemo(() => {
     if (!liveData?.eventos) return null;
 
-    // Agregamos los eventos del período filtrado
+    // ============================================
+    // 1️⃣ AGREGAR EVENTOS DEL PERÍODO ACTUAL
+    // ============================================
     const eventosAgregados = {};
     liveData.eventos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
       const ev = row['Nombre del Evento'] || '';
       const usuarios = Number(row['Usuarios']) || 0;
       const conteo = Number(row['Conversiones']) || 0;
       const valor = Number(row['Valor del Evento']) || 0;
-
       if (!eventosAgregados[ev]) eventosAgregados[ev] = { usuarios: 0, conteo: 0, valor: 0 };
       eventosAgregados[ev].usuarios += usuarios;
       eventosAgregados[ev].conteo += conteo;
       eventosAgregados[ev].valor += valor;
     });
 
-    // Construir el funnel de 5 pasos
+    // ============================================
+    // 2️⃣ DETECTAR MODO B2B vs B2C AUTOMÁTICAMENTE
+    // ============================================
+    const checkoutEvents = ['begin_checkout', 'add_to_cart', 'purchase', 'add_payment_info', 'add_shipping_info'];
+    const leadEvents = ['form_submit', 'generate_lead', 'contact', 'phone_click', 'whatsapp_click', 'email_click', 'sign_up', 'click_to_call'];
+
+    const tieneCheckout = checkoutEvents.some(ev => (eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo) > 0);
+    const tieneLeads = leadEvents.some(ev => (eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo) > 0);
+
+    // Si tiene checkout → modo B2C completo. Si solo tiene leads → B2B. Si tiene ambos → B2C (prioridad).
+    const modo = tieneCheckout ? 'b2c' : (tieneLeads ? 'b2b' : 'b2b'); // default B2B si no hay nada
+
+    // Datos comunes
     const sesiones = kpis.sesiones || 0;
     const sesionesEng = kpis.sesionesEng || 0;
     const scrollUsers = eventosAgregados['scroll']?.usuarios || 0;
-    const beginCheckout = eventosAgregados['begin_checkout']?.usuarios || 0;
-    const purchase = eventosAgregados['purchase']?.usuarios || eventosAgregados['purchase']?.conteo || 0;
-    const purchaseValor = eventosAgregados['purchase']?.valor || 0;
 
-    const pasos = [
-      {
-        nombre: 'Sesiones',
-        descripcion: 'Visitas iniciadas al sitio',
-        valor: sesiones,
-        icon: Users,
-        color: GORUTY.primary,
-        emoji: '👥'
-      },
-      {
-        nombre: 'Engagement',
-        descripcion: 'Sesiones >10s o múltiples páginas',
-        valor: sesionesEng,
-        icon: Heart,
-        color: GORUTY.secondary,
-        emoji: '💖'
-      },
-      {
-        nombre: 'Interés Profundo',
-        descripcion: 'Hicieron scroll completo',
-        valor: scrollUsers,
-        icon: Move,
-        color: GORUTY.tertiary,
-        emoji: '📜'
-      },
-      {
-        nombre: 'Inicio Checkout',
-        descripcion: 'Llegaron al proceso de compra',
-        valor: beginCheckout,
-        icon: ShoppingCart,
-        color: GORUTY.accent,
-        emoji: '🛒'
-      },
-      {
-        nombre: 'Compra',
-        descripcion: 'Completaron la compra',
-        valor: purchase,
-        icon: CreditCard,
-        color: GORUTY.deepPurple,
-        emoji: '💰'
-      }
-    ];
+    // ============================================
+    // 3️⃣ CONSTRUIR PASOS SEGÚN MODO
+    // ============================================
+    let pasos = [];
+    let purchaseValor = 0;
 
-    // Calcular % vs total y % vs paso anterior, y drop-off
-    const total = sesiones || 1; // evita división por 0
+    if (modo === 'b2c') {
+      const beginCheckout = eventosAgregados['begin_checkout']?.usuarios || 0;
+      const purchase = eventosAgregados['purchase']?.usuarios || eventosAgregados['purchase']?.conteo || 0;
+      purchaseValor = eventosAgregados['purchase']?.valor || 0;
+
+      pasos = [
+        { nombre: 'Sesiones', descripcion: 'Visitas iniciadas al sitio', valor: sesiones, icon: Users, color: GORUTY.primary, emoji: '👥' },
+        { nombre: 'Engagement', descripcion: 'Sesiones >10s o múltiples páginas', valor: sesionesEng, icon: Heart, color: GORUTY.secondary, emoji: '💖' },
+        { nombre: 'Interés Profundo', descripcion: 'Hicieron scroll completo', valor: scrollUsers, icon: Move, color: GORUTY.tertiary, emoji: '📜' },
+        { nombre: 'Inicio Checkout', descripcion: 'Llegaron al proceso de compra', valor: beginCheckout, icon: ShoppingCart, color: GORUTY.accent, emoji: '🛒' },
+        { nombre: 'Compra', descripcion: 'Completaron la compra', valor: purchase, icon: CreditCard, color: GORUTY.deepPurple, emoji: '💰' }
+      ];
+    } else {
+      // Modo B2B — sumar todos los eventos de leads
+      let leadsCount = 0;
+      const leadsEventosUsados = [];
+      leadEvents.forEach(ev => {
+        const cnt = eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo || 0;
+        if (cnt > 0) {
+          leadsCount += cnt;
+          leadsEventosUsados.push(`${ev} (${cnt})`);
+        }
+      });
+
+      pasos = [
+        { nombre: 'Sesiones', descripcion: 'Visitas iniciadas al sitio', valor: sesiones, icon: Users, color: GORUTY.primary, emoji: '👥' },
+        { nombre: 'Engagement', descripcion: 'Sesiones >10s o múltiples páginas', valor: sesionesEng, icon: Heart, color: GORUTY.secondary, emoji: '💖' },
+        { nombre: 'Interés Profundo', descripcion: 'Hicieron scroll completo', valor: scrollUsers, icon: Move, color: GORUTY.tertiary, emoji: '📜' },
+        { nombre: 'Leads / Contacto', descripcion: leadsEventosUsados.length > 0 ? `Eventos: ${leadsEventosUsados.slice(0, 2).join(', ')}` : 'Formulario, llamada, WhatsApp, etc.', valor: leadsCount, icon: Send, color: GORUTY.deepPurple, emoji: '📧' }
+      ];
+    }
+
+    // ============================================
+    // 4️⃣ CALCULAR % VS TOTAL Y VS ANTERIOR
+    // ============================================
+    const total = sesiones || 1;
     const pasosCalc = pasos.map((paso, idx) => {
       const pct = total ? (paso.valor / total) * 100 : 0;
       const pctAnterior = idx === 0 ? 100 : (pasos[idx - 1].valor ? (paso.valor / pasos[idx - 1].valor) * 100 : 0);
@@ -748,16 +757,87 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
       return { ...paso, pct, pctAnterior, dropOff, perdidos };
     });
 
-    // Detectar el cuello de botella (paso con mayor drop-off, excluyendo el primero)
-    let mayorDropOff = { paso: null, pct: 0 };
-    pasosCalc.forEach((p, i) => {
-      if (i > 0 && p.dropOff > mayorDropOff.pct && pasos[i - 1].valor > 0) {
-        mayorDropOff = { paso: p, pct: p.dropOff, anterior: pasosCalc[i - 1] };
-      }
-    });
+    // ============================================
+    // 5️⃣ COMPARATIVA CON PERÍODO ANTERIOR
+    // ============================================
+    // Calcular las fechas del período anterior basándose en el dateRange
+    let comparativa = null;
+    if (trendData && trendData.length > 0 && dateRange !== 'all') {
+      const fechasOrdenadas = trendData.map(d => d.fechaCompleta).filter(Boolean).sort();
+      const primeraFecha = fechasOrdenadas[0];
+      const diasPeriodo = trendData.length;
 
-    return { pasos: pasosCalc, total, purchaseValor, mayorDropOff };
-  }, [liveData, kpis, dateFilter]);
+      // Calcular fecha de inicio del período anterior
+      const fechaInicio = new Date(primeraFecha);
+      const fechaFinAnterior = new Date(fechaInicio);
+      fechaFinAnterior.setDate(fechaFinAnterior.getDate() - 1);
+      const fechaInicioAnterior = new Date(fechaFinAnterior);
+      fechaInicioAnterior.setDate(fechaInicioAnterior.getDate() - diasPeriodo + 1);
+
+      const fmtDate = (d) => d.toISOString().slice(0, 10);
+      const inicioAntStr = fmtDate(fechaInicioAnterior);
+      const finAntStr = fmtDate(fechaFinAnterior);
+
+      // Filtro para el período anterior
+      const enPeriodoAnterior = (fechaRaw) => {
+        if (!fechaRaw) return false;
+        const f = String(fechaRaw).slice(0, 10);
+        return f >= inicioAntStr && f <= finAntStr;
+      };
+
+      // Sumar sesiones y engagement del período anterior usando resumenDiario
+      let sesionesAnt = 0, sesionesEngAnt = 0;
+      (liveData.resumenDiario || []).filter(row => enPeriodoAnterior(row['Fecha'])).forEach(row => {
+        sesionesAnt += Number(row['Sesiones']) || 0;
+        sesionesEngAnt += Number(row['Sesiones Comprometidas']) || 0;
+      });
+
+      // Sumar eventos del período anterior
+      const eventosAnteriores = {};
+      liveData.eventos.filter(row => enPeriodoAnterior(row['Fecha'])).forEach(row => {
+        const ev = row['Nombre del Evento'] || '';
+        const usuarios = Number(row['Usuarios']) || 0;
+        const conteo = Number(row['Conversiones']) || 0;
+        if (!eventosAnteriores[ev]) eventosAnteriores[ev] = 0;
+        eventosAnteriores[ev] += usuarios || conteo;
+      });
+
+      const valoresAnt = {
+        Sesiones: sesionesAnt,
+        Engagement: sesionesEngAnt,
+        'Interés Profundo': eventosAnteriores['scroll'] || 0,
+      };
+      if (modo === 'b2c') {
+        valoresAnt['Inicio Checkout'] = eventosAnteriores['begin_checkout'] || 0;
+        valoresAnt['Compra'] = eventosAnteriores['purchase'] || 0;
+      } else {
+        let leadsAnt = 0;
+        leadEvents.forEach(ev => { leadsAnt += eventosAnteriores[ev] || 0; });
+        valoresAnt['Leads / Contacto'] = leadsAnt;
+      }
+
+      // Anexar comparativa a cada paso
+      pasosCalc.forEach(paso => {
+        const valorAnt = valoresAnt[paso.nombre] || 0;
+        if (valorAnt > 0) {
+          const cambio = ((paso.valor - valorAnt) / valorAnt) * 100;
+          paso.valorAnterior = valorAnt;
+          paso.cambio = cambio;
+        } else {
+          paso.valorAnterior = valorAnt;
+          paso.cambio = paso.valor > 0 ? 100 : 0;
+        }
+      });
+
+      comparativa = {
+        disponible: true,
+        rangoAnterior: `${inicioAntStr} a ${finAntStr}`,
+        diasComparados: diasPeriodo
+      };
+    }
+
+    return { pasos: pasosCalc, total, purchaseValor, modo, comparativa };
+  }, [liveData, kpis, dateFilter, dateRange, trendData]);
 
   const fmt = (n) => Number(n).toLocaleString('es-CL');
   const fmtMoney = (n) => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : `$${(n / 1000).toFixed(0)}K`;
@@ -771,33 +851,90 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
     );
   }
 
-  const { pasos, total, purchaseValor, mayorDropOff } = funnelData;
+  const { pasos, total, purchaseValor, modo, comparativa } = funnelData;
   const tasaConversion = pasos[pasos.length - 1].pct.toFixed(2);
   const valorPorSesion = total ? (purchaseValor / total) : 0;
+  const ultimoPaso = pasos[pasos.length - 1];
+
+  // Helper para mostrar cambio %
+  const renderCambio = (cambio) => {
+    if (cambio === undefined || cambio === null) return null;
+    const positivo = cambio > 0;
+    const Icon = positivo ? TrendingUp : TrendingDown;
+    const color = positivo ? '#10b981' : '#ef4444';
+    const bgColor = positivo ? '#10b98115' : '#ef444415';
+    return (
+      <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ color, backgroundColor: bgColor }}>
+        <Icon className="w-2.5 h-2.5" />
+        <span>{positivo ? '+' : ''}{cambio.toFixed(1)}%</span>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
+      {/* Banner de modo detectado */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl border" style={{ backgroundColor: modo === 'b2c' ? '#5b4bff10' : '#10b98110', borderColor: modo === 'b2c' ? '#5b4bff30' : '#10b98130' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-base">{modo === 'b2c' ? '🛒' : '📧'}</span>
+          <div>
+            <span className="text-xs font-bold" style={{ color: modo === 'b2c' ? GORUTY.primary : '#059669' }}>
+              {modo === 'b2c' ? 'Modo B2C detectado' : 'Modo B2B detectado'}
+            </span>
+            <span className="text-[10px] text-slate-500 ml-2">
+              {modo === 'b2c' ? 'Cliente con e-commerce / checkout' : 'Cliente de captación de leads'}
+            </span>
+          </div>
+        </div>
+        {comparativa?.disponible && (
+          <div className="text-[10px] text-slate-500 hidden md:block">
+            📊 Comparando vs período anterior ({comparativa.diasComparados} días)
+          </div>
+        )}
+      </div>
+
       {/* Métricas resumen del funnel */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white border border-violet-100 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1 font-medium">🎯 Tasa Conversión Global</div>
-          <div className="text-2xl font-bold" style={{ color: GORUTY.primary }}>{tasaConversion}%</div>
-          <div className="text-[10px] text-slate-400 mt-1">Sesiones → Compra</div>
+          <div className="flex items-center gap-2">
+            <div className="text-2xl font-bold" style={{ color: GORUTY.primary }}>{tasaConversion}%</div>
+            {comparativa?.disponible && ultimoPaso.cambio !== undefined && pasos[0].valorAnterior > 0 && (() => {
+              const tasaAnt = pasos[0].valorAnterior > 0 ? (ultimoPaso.valorAnterior / pasos[0].valorAnterior) * 100 : 0;
+              const cambioTasa = tasaAnt > 0 ? tasaConversion - tasaAnt : 0;
+              return cambioTasa !== 0 ? renderCambio(cambioTasa) : null;
+            })()}
+          </div>
+          <div className="text-[10px] text-slate-400 mt-1">Sesiones → {ultimoPaso.nombre}</div>
         </div>
         <div className="bg-white border border-violet-100 rounded-xl p-4">
-          <div className="text-xs text-slate-500 mb-1 font-medium">💰 Ingresos Totales</div>
-          <div className="text-2xl font-bold" style={{ color: GORUTY.deepPurple }}>{fmtMoney(purchaseValor)}</div>
-          <div className="text-[10px] text-slate-400 mt-1">{fmt(pasos[pasos.length - 1].valor)} compras</div>
+          <div className="text-xs text-slate-500 mb-1 font-medium">{modo === 'b2c' ? '💰 Ingresos Totales' : '📧 Total Leads'}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-2xl font-bold" style={{ color: GORUTY.deepPurple }}>{modo === 'b2c' ? fmtMoney(purchaseValor) : fmt(ultimoPaso.valor)}</div>
+            {comparativa?.disponible && ultimoPaso.cambio !== undefined && renderCambio(ultimoPaso.cambio)}
+          </div>
+          <div className="text-[10px] text-slate-400 mt-1">{modo === 'b2c' ? `${fmt(ultimoPaso.valor)} compras` : 'En el período'}</div>
         </div>
+        {modo === 'b2c' ? (
+          <div className="bg-white border border-violet-100 rounded-xl p-4">
+            <div className="text-xs text-slate-500 mb-1 font-medium">📊 Valor por Sesión</div>
+            <div className="text-2xl font-bold" style={{ color: GORUTY.accent }}>${fmt(Math.round(valorPorSesion))}</div>
+            <div className="text-[10px] text-slate-400 mt-1">Promedio</div>
+          </div>
+        ) : (
+          <div className="bg-white border border-violet-100 rounded-xl p-4">
+            <div className="text-xs text-slate-500 mb-1 font-medium">🎯 Costo Lead (sesiones)</div>
+            <div className="text-2xl font-bold" style={{ color: GORUTY.accent }}>{ultimoPaso.valor > 0 ? fmt(Math.round(total / ultimoPaso.valor)) : '—'}</div>
+            <div className="text-[10px] text-slate-400 mt-1">Sesiones por lead</div>
+          </div>
+        )}
         <div className="bg-white border border-violet-100 rounded-xl p-4">
-          <div className="text-xs text-slate-500 mb-1 font-medium">📊 Valor por Sesión</div>
-          <div className="text-2xl font-bold" style={{ color: GORUTY.accent }}>${fmt(Math.round(valorPorSesion))}</div>
-          <div className="text-[10px] text-slate-400 mt-1">Promedio</div>
-        </div>
-        <div className="bg-white border border-violet-100 rounded-xl p-4">
-          <div className="text-xs text-slate-500 mb-1 font-medium">⚠️ Mayor Caída</div>
-          <div className="text-2xl font-bold text-rose-600">{mayorDropOff.paso ? `${mayorDropOff.pct.toFixed(1)}%` : '—'}</div>
-          <div className="text-[10px] text-slate-400 mt-1">{mayorDropOff.paso ? `En ${mayorDropOff.paso.nombre}` : 'Sin datos'}</div>
+          <div className="text-xs text-slate-500 mb-1 font-medium">👥 Sesiones</div>
+          <div className="flex items-center gap-2">
+            <div className="text-2xl font-bold text-slate-700">{fmt(total)}</div>
+            {comparativa?.disponible && pasos[0].cambio !== undefined && renderCambio(pasos[0].cambio)}
+          </div>
+          <div className="text-[10px] text-slate-400 mt-1">Total entradas</div>
         </div>
       </div>
 
@@ -805,27 +942,40 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
       <div className="bg-white border border-violet-100 rounded-xl p-6 shadow-sm">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-sm font-semibold text-slate-800">🎯 Etapas del Funnel</h3>
-          <span className="text-xs text-slate-400">% sobre total de sesiones</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-400 hidden md:inline">% sobre total de sesiones</span>
+            <span className="text-[10px] text-slate-400">💡 Pasa el mouse sobre las etapas</span>
+          </div>
         </div>
         <div className="space-y-2">
           {pasos.map((paso, idx) => {
             const Icon = paso.icon;
-            // Width proporcional al porcentaje vs total (con un mínimo de 8% para que se vea)
             const width = Math.max(paso.pct, paso.valor > 0 ? 8 : 2);
             const isFirst = idx === 0;
             const drop = !isFirst && paso.dropOff > 0;
+            const conversionEntreEtapas = isFirst ? 100 : paso.pctAnterior;
 
             return (
               <div key={idx}>
-                {/* Indicador de drop-off entre etapas */}
+                {/* Indicador de drop-off / conversión entre etapas */}
                 {drop && (
-                  <div className="flex items-center justify-center my-1 text-[10px] font-semibold text-rose-500 gap-1">
-                    <ArrowDownRight className="w-3 h-3" />
-                    <span>-{paso.dropOff.toFixed(1)}% ({fmt(paso.perdidos)} usuarios perdidos)</span>
+                  <div className="flex items-center justify-center my-1.5 gap-3">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-rose-500">
+                      <ArrowDownRight className="w-3 h-3" />
+                      <span>-{paso.dropOff.toFixed(1)}% ({fmt(paso.perdidos)} perdidos)</span>
+                    </div>
+                    <div className="text-[10px] text-slate-300">|</div>
+                    <div className="flex items-center gap-1 text-[10px] font-semibold" style={{ color: conversionEntreEtapas > 50 ? '#10b981' : (conversionEntreEtapas > 10 ? '#f59e0b' : '#ef4444') }}>
+                      <span>✓ {conversionEntreEtapas.toFixed(1)}% convirtieron</span>
+                    </div>
                   </div>
                 )}
 
-                <div className="flex items-center gap-3">
+                <div
+                  className="flex items-center gap-3 group transition-all hover:bg-violet-50/30 rounded-lg p-1 -m-1 relative"
+                  onMouseEnter={() => setHoveredStep(idx)}
+                  onMouseLeave={() => setHoveredStep(null)}
+                >
                   {/* Icono y nombre */}
                   <div className="flex items-center gap-2 w-44 flex-shrink-0">
                     <div className="p-1.5 rounded-md flex-shrink-0" style={{ backgroundColor: `${paso.color}20` }}>
@@ -848,25 +998,76 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
                       }}
                     >
                       <span className="text-white font-bold text-sm drop-shadow">{fmt(paso.valor)}</span>
-                      <span className="text-white text-xs font-semibold opacity-90 drop-shadow">
-                        {paso.pct.toFixed(2)}%
-                      </span>
+                      <span className="text-white text-xs font-semibold opacity-90 drop-shadow">{paso.pct.toFixed(2)}%</span>
                     </div>
-                    {/* Si la barra es muy chica, mostrar el número fuera */}
                     {paso.valor > 0 && width < 15 && (
-                      <span className="absolute top-1/2 -translate-y-1/2 left-[125px] text-[10px] font-semibold text-slate-600">
-                        {paso.pct.toFixed(2)}%
-                      </span>
+                      <span className="absolute top-1/2 -translate-y-1/2 left-[125px] text-[10px] font-semibold text-slate-600">{paso.pct.toFixed(2)}%</span>
                     )}
                   </div>
 
-                  {/* % vs paso anterior */}
+                  {/* % vs paso anterior + cambio vs período */}
                   {!isFirst && (
-                    <div className="w-24 text-right flex-shrink-0">
+                    <div className="w-28 text-right flex-shrink-0">
                       <div className="text-xs font-bold" style={{ color: paso.pctAnterior > 50 ? GORUTY.success : (paso.pctAnterior > 10 ? GORUTY.warning : GORUTY.danger) }}>
                         {paso.pctAnterior.toFixed(1)}%
                       </div>
                       <div className="text-[9px] text-slate-400">vs anterior</div>
+                      {comparativa?.disponible && paso.cambio !== undefined && (
+                        <div className="mt-1">{renderCambio(paso.cambio)}</div>
+                      )}
+                    </div>
+                  )}
+                  {isFirst && comparativa?.disponible && paso.cambio !== undefined && (
+                    <div className="w-28 text-right flex-shrink-0">
+                      <div className="text-[9px] text-slate-400 mb-0.5">vs período ant.</div>
+                      <div>{renderCambio(paso.cambio)}</div>
+                    </div>
+                  )}
+
+                  {/* TOOLTIP enriquecido */}
+                  {hoveredStep === idx && (
+                    <div className="absolute left-44 top-full mt-2 z-50 bg-slate-900 text-white rounded-xl p-4 shadow-2xl min-w-[280px] pointer-events-none" style={{ marginLeft: '8px' }}>
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
+                        <span className="text-lg">{paso.emoji}</span>
+                        <div>
+                          <div className="text-sm font-bold">{paso.nombre}</div>
+                          <div className="text-[10px] text-slate-400">{paso.descripcion}</div>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-400">Usuarios:</span>
+                          <span className="font-bold text-white">{fmt(paso.valor)}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-400">% del total:</span>
+                          <span className="font-semibold" style={{ color: paso.color }}>{paso.pct.toFixed(2)}%</span>
+                        </div>
+                        {!isFirst && (
+                          <>
+                            <div className="flex justify-between gap-4">
+                              <span className="text-slate-400">Convierten desde anterior:</span>
+                              <span className="font-semibold" style={{ color: paso.pctAnterior > 50 ? '#34d399' : '#fbbf24' }}>{paso.pctAnterior.toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <span className="text-slate-400">Caída en este paso:</span>
+                              <span className="font-semibold text-rose-400">-{paso.dropOff.toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <span className="text-slate-400">Usuarios perdidos:</span>
+                              <span className="font-semibold text-rose-400">{fmt(paso.perdidos)}</span>
+                            </div>
+                          </>
+                        )}
+                        {comparativa?.disponible && paso.cambio !== undefined && (
+                          <div className="flex justify-between gap-4 pt-1.5 mt-1.5 border-t border-slate-700">
+                            <span className="text-slate-400">vs período anterior:</span>
+                            <span className={`font-bold ${paso.cambio > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {paso.cambio > 0 ? '↑ +' : '↓ '}{paso.cambio.toFixed(1)}% ({fmt(paso.valorAnterior)})
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -875,25 +1076,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
           })}
         </div>
       </div>
-
-      {/* Insight automático */}
-      {mayorDropOff.paso && (
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-amber-100 flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-bold text-slate-900 mb-1">💡 Insight: Cuello de botella detectado</h4>
-              <p className="text-xs text-slate-700 leading-relaxed">
-                La mayor caída está entre <strong>{mayorDropOff.anterior?.nombre}</strong> ({fmt(mayorDropOff.anterior?.valor)}) y <strong>{mayorDropOff.paso.nombre}</strong> ({fmt(mayorDropOff.paso.valor)}).
-                Pierdes el <strong className="text-rose-600">{mayorDropOff.pct.toFixed(1)}%</strong> de los usuarios en este paso.
-                Si lograras reducir esa caída en un 10%, ganarías <strong className="text-emerald-600">~{fmt(Math.round(mayorDropOff.paso.perdidos * 0.1))} usuarios adicionales</strong> que podrían avanzar al siguiente paso.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tabla de detalle */}
       <div className="bg-white border border-violet-100 rounded-xl p-5 shadow-sm">
@@ -905,9 +1087,10 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
                 <th className="py-2 px-3 font-semibold">Etapa</th>
                 <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
                 <th className="py-2 px-3 text-right font-semibold">% vs Total</th>
-                <th className="py-2 px-3 text-right font-semibold">% vs Anterior</th>
+                <th className="py-2 px-3 text-right font-semibold">% Conv. Anterior</th>
                 <th className="py-2 px-3 text-right font-semibold">Drop-off</th>
                 <th className="py-2 px-3 text-right font-semibold">Perdidos</th>
+                {comparativa?.disponible && <th className="py-2 px-3 text-right font-semibold">vs Período Ant.</th>}
               </tr>
             </thead>
             <tbody>
@@ -924,10 +1107,20 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient }) {
                   <td className="py-2.5 px-3 text-right text-slate-700">{i === 0 ? '—' : `${paso.pctAnterior.toFixed(1)}%`}</td>
                   <td className="py-2.5 px-3 text-right">{i === 0 ? '—' : <span className="text-rose-600 font-semibold">{paso.dropOff.toFixed(1)}%</span>}</td>
                   <td className="py-2.5 px-3 text-right text-slate-500">{i === 0 ? '—' : fmt(paso.perdidos)}</td>
+                  {comparativa?.disponible && (
+                    <td className="py-2.5 px-3 text-right">
+                      {paso.cambio !== undefined ? renderCambio(paso.cambio) : '—'}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
+          {comparativa?.disponible && (
+            <div className="text-[10px] text-slate-400 mt-3 text-right">
+              📊 Comparando con período: {comparativa.rangoAnterior} ({comparativa.diasComparados} días)
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1560,7 +1753,7 @@ function Dashboard({ session, onLogout }) {
             <SectionHeader title="Funnel de Conversión" subtitle="Recorrido del usuario desde sesión hasta compra" icon={Target} sectionKey="funnel" badge="🎯 Nuevo" />
             {sections.funnel && (
               <div className="mb-6">
-                <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} />
+                <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} dateRange={dateRange} trendData={trendData} />
               </div>
             )}
 
