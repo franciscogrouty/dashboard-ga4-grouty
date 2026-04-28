@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, FunnelChart, Funnel, LabelList } from 'recharts';
-import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight, Search } from 'lucide-react';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUkLrgfuo1k-RuTPc7VtVrlenEv58LTMAP07l-CxPpgcCqtVw/exec';
 
@@ -133,7 +133,91 @@ function buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, t
       if (ex) { ex.conteo += conteo; ex.usuarios += usuarios; ex.valor += valor; }
       else acc.push({ evento: ev, conteo, usuarios, valor, esConversion: esConv });
       return acc;
-    }, []).sort((a, b) => b.conteo - a.conteo).slice(0, 25)
+    }, []).sort((a, b) => b.conteo - a.conteo).slice(0, 25),
+
+    // 🔍 CONTEXTO SEO (si está disponible)
+    seo: (() => {
+      const seoData = liveData?.seo;
+      if (!seoData?.disponible) return { disponible: false };
+
+      const keywords = seoData.keywords || [];
+      const paginas = seoData.paginasSEO || [];
+      const tendencia = seoData.tendenciaSEO || [];
+      const movimientos = seoData.posicionesSEO || [];
+
+      const totalClics = keywords.reduce((s, k) => s + (Number(k['Clics']) || 0), 0);
+      const totalImpr = keywords.reduce((s, k) => s + (Number(k['Impresiones']) || 0), 0);
+      const ctrPromedio = totalImpr > 0 ? ((totalClics / totalImpr) * 100).toFixed(2) : 0;
+      const posicionPromedio = keywords.length > 0
+        ? (keywords.reduce((s, k) => s + (Number(k['Posición Promedio']) || 0), 0) / keywords.length).toFixed(1)
+        : 0;
+
+      const quickWins = keywords.filter(k => {
+        const pos = Number(k['Posición Promedio']) || 999;
+        const impr = Number(k['Impresiones']) || 0;
+        return pos >= 5 && pos <= 15 && impr >= 100;
+      }).sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0)).slice(0, 20);
+
+      const topKeywords = [...keywords]
+        .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
+        .slice(0, 30)
+        .map(k => ({
+          keyword: k['Keyword'],
+          clics: Number(k['Clics']) || 0,
+          impresiones: Number(k['Impresiones']) || 0,
+          ctr: k['CTR (%)'],
+          posicion: Number(k['Posición Promedio']) || 0
+        }));
+
+      const subidas = movimientos.filter(m => {
+        const cambio = Number(m['Cambio']) || 0;
+        return cambio > 0;
+      }).sort((a, b) => (Number(b['Cambio']) || 0) - (Number(a['Cambio']) || 0)).slice(0, 10).map(m => ({
+        keyword: m['Keyword'],
+        posActual: Number(m['Pos. Actual (7d)']) || 0,
+        posAnterior: Number(m['Pos. Anterior (7d)']) || 0,
+        cambio: Number(m['Cambio']) || 0
+      }));
+
+      const caidas = movimientos.filter(m => {
+        const cambio = Number(m['Cambio']) || 0;
+        return cambio < 0;
+      }).sort((a, b) => (Number(a['Cambio']) || 0) - (Number(b['Cambio']) || 0)).slice(0, 10).map(m => ({
+        keyword: m['Keyword'],
+        posActual: Number(m['Pos. Actual (7d)']) || 0,
+        posAnterior: Number(m['Pos. Anterior (7d)']) || 0,
+        cambio: Number(m['Cambio']) || 0
+      }));
+
+      const topPaginas = [...paginas]
+        .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
+        .slice(0, 15)
+        .map(p => ({
+          url: p['URL'],
+          clics: Number(p['Clics']) || 0,
+          impresiones: Number(p['Impresiones']) || 0,
+          ctr: p['CTR (%)'],
+          posicion: Number(p['Posición Promedio']) || 0,
+          seccion: p['Sección']
+        }));
+
+      return {
+        disponible: true,
+        totales: { totalClics, totalImpresiones: totalImpr, ctrPromedio, posicionPromedio, totalKeywords: keywords.length },
+        quickWins,
+        topKeywords,
+        subidas,
+        caidas,
+        topPaginas,
+        tendenciaDiaria: tendencia.slice(-40).map(t => ({
+          fecha: t['Fecha'],
+          clics: Number(t['Clics']) || 0,
+          impresiones: Number(t['Impresiones']) || 0,
+          ctr: t['CTR (%)'],
+          posicion: Number(t['Posición Promedio']) || 0
+        }))
+      };
+    })()
   };
 }
 
@@ -241,6 +325,343 @@ function LoginScreen({ onLogin }) {
         </div>
         <div className="text-center mt-4 text-xs text-slate-400">🔐 Acceso seguro · Datos confidenciales</div>
       </div>
+    </div>
+  );
+}
+
+// =============================================
+// 🔍 SEO SECTION — Google Search Console
+// =============================================
+function SEOSection({ liveData, currentClient }) {
+  const seoData = liveData?.seo;
+
+  const seoComputed = useMemo(() => {
+    if (!seoData?.disponible) return null;
+
+    const keywords = seoData.keywords || [];
+    const paginas = seoData.paginasSEO || [];
+    const tendencia = seoData.tendenciaSEO || [];
+    const movimientos = seoData.posicionesSEO || [];
+
+    // KPIs totales
+    const totalClics = keywords.reduce((s, k) => s + (Number(k['Clics']) || 0), 0);
+    const totalImpresiones = keywords.reduce((s, k) => s + (Number(k['Impresiones']) || 0), 0);
+    const ctrPromedio = totalImpresiones > 0 ? ((totalClics / totalImpresiones) * 100) : 0;
+    const posicionPromedio = keywords.length > 0
+      ? (keywords.reduce((s, k) => s + (Number(k['Posición Promedio']) || 0), 0) / keywords.length)
+      : 0;
+
+    // Quick Wins: posición 5-15 + impresiones >= 100
+    const quickWins = keywords.filter(k => {
+      const pos = Number(k['Posición Promedio']) || 999;
+      const impr = Number(k['Impresiones']) || 0;
+      return pos >= 5 && pos <= 15 && impr >= 100;
+    }).sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0)).slice(0, 25);
+
+    // Top Keywords (por clics)
+    const topKeywords = [...keywords]
+      .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
+      .slice(0, 25);
+
+    // Movimientos
+    const subidas = movimientos.filter(m => (Number(m['Cambio']) || 0) > 0)
+      .sort((a, b) => (Number(b['Cambio']) || 0) - (Number(a['Cambio']) || 0))
+      .slice(0, 15);
+    const caidas = movimientos.filter(m => (Number(m['Cambio']) || 0) < 0)
+      .sort((a, b) => (Number(a['Cambio']) || 0) - (Number(b['Cambio']) || 0))
+      .slice(0, 15);
+
+    // Top Páginas
+    const topPaginas = [...paginas]
+      .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
+      .slice(0, 20);
+
+    // Tendencia diaria — últimos 40 días
+    const trendData = tendencia.slice(-40).map(t => ({
+      fecha: String(t['Fecha'] || '').slice(5, 10),
+      fechaCompleta: String(t['Fecha'] || '').slice(0, 10),
+      clics: Number(t['Clics']) || 0,
+      impresiones: Number(t['Impresiones']) || 0,
+      posicion: Number(t['Posición Promedio']) || 0
+    }));
+
+    return {
+      totalClics, totalImpresiones, ctrPromedio, posicionPromedio,
+      totalKeywords: keywords.length,
+      quickWins, topKeywords, subidas, caidas, topPaginas, trendData
+    };
+  }, [seoData]);
+
+  if (!seoData?.disponible) {
+    return (
+      <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-8 text-center">
+        <div className="text-5xl mb-3">🔍</div>
+        <h3 className="text-lg font-bold text-slate-800 mb-2">SEO no disponible para este cliente</h3>
+        <p className="text-sm text-slate-600">
+          Aún no se ha configurado el Sheet de Google Search Console para <strong>{currentClient?.nombre}</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  if (!seoComputed) return null;
+
+  const fmt = (n) => Number(n).toLocaleString('es-CL');
+  const tooltipStyle = {
+    contentStyle: { background: 'white', border: '1px solid #ddd6fe', borderRadius: '8px', fontSize: 12 },
+    labelStyle: { color: '#5b4bff', fontWeight: 600 }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs SEO */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#5b4bff20' }}>
+              <span className="text-base">🔍</span>
+            </div>
+            <span className="text-xs font-medium text-slate-500">Clics SEO</span>
+          </div>
+          <div className="text-2xl font-bold text-slate-800">{fmt(seoComputed.totalClics)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#8b5cf620' }}>
+              <span className="text-base">👁️</span>
+            </div>
+            <span className="text-xs font-medium text-slate-500">Impresiones</span>
+          </div>
+          <div className="text-2xl font-bold text-slate-800">{fmt(seoComputed.totalImpresiones)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#10b98120' }}>
+              <span className="text-base">📊</span>
+            </div>
+            <span className="text-xs font-medium text-slate-500">CTR Promedio</span>
+          </div>
+          <div className="text-2xl font-bold text-slate-800">{seoComputed.ctrPromedio.toFixed(2)}%</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#f59e0b20' }}>
+              <span className="text-base">🎯</span>
+            </div>
+            <span className="text-xs font-medium text-slate-500">Posición Prom.</span>
+          </div>
+          <div className="text-2xl font-bold text-slate-800">{seoComputed.posicionPromedio.toFixed(1)}</div>
+        </div>
+        <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-4 shadow-md">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20">
+              <span className="text-base">⚡</span>
+            </div>
+            <span className="text-xs font-medium text-white/90">Quick Wins</span>
+          </div>
+          <div className="text-2xl font-bold text-white">{seoComputed.quickWins.length}</div>
+          <div className="text-[10px] text-white/80 mt-0.5">Oportunidades a atacar</div>
+        </div>
+      </div>
+
+      {/* Gráfico tendencia diaria */}
+      {seoComputed.trendData.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-semibold text-slate-800">Tendencia Diaria SEO</h3>
+              <p className="text-xs text-slate-500">Clics e impresiones por día (últimos 40 días)</p>
+            </div>
+            <div className="text-xs px-3 py-1 rounded-full bg-violet-50 text-violet-700 font-medium">
+              {seoComputed.totalKeywords} keywords
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={seoComputed.trendData}>
+              <defs>
+                <linearGradient id="seoClicsGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#5b4bff" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#5b4bff" stopOpacity={0.05} />
+                </linearGradient>
+                <linearGradient id="seoImprGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+              <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
+              <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 11 }} />
+              <YAxis yAxisId="right" orientation="right" stroke="#94a3b8" style={{ fontSize: 11 }} />
+              <Tooltip {...tooltipStyle} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              <Area yAxisId="right" type="monotone" dataKey="impresiones" name="Impresiones" stroke="#8b5cf6" fill="url(#seoImprGrad)" strokeWidth={2} />
+              <Area yAxisId="left" type="monotone" dataKey="clics" name="Clics" stroke="#5b4bff" fill="url(#seoClicsGrad)" strokeWidth={2.5} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Quick Wins */}
+      {seoComputed.quickWins.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span>⚡</span> Quick Wins — Oportunidades Top
+              </h3>
+              <p className="text-xs text-slate-500">Keywords en posición 5–15 con muchas impresiones. Atacarlas = subida fuerte de tráfico.</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-3 font-semibold">Keyword</th>
+                  <th className="py-2 px-3 text-right font-semibold">Clics</th>
+                  <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
+                  <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                  <th className="py-2 px-3 text-right font-semibold">Posición</th>
+                </tr>
+              </thead>
+              <tbody>
+                {seoComputed.quickWins.map((k, i) => (
+                  <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                    <td className="py-2 px-3 text-slate-700 font-medium">{k['Keyword']}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Clics'])}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Impresiones'])}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{k['CTR (%)']}</td>
+                    <td className="py-2 px-3 text-right">
+                      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: '#f59e0b20', color: '#b45309' }}>
+                        {Number(k['Posición Promedio']).toFixed(1)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Grid: Top Keywords + Movimientos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top Keywords */}
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+              <span>🏆</span> Top 25 Keywords
+            </h3>
+            <p className="text-xs text-slate-500">Ordenadas por clics</p>
+          </div>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-3 font-semibold">Keyword</th>
+                  <th className="py-2 px-3 text-right font-semibold">Clics</th>
+                  <th className="py-2 px-3 text-right font-semibold">Pos.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {seoComputed.topKeywords.map((k, i) => (
+                  <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                    <td className="py-2 px-3 text-slate-700 truncate max-w-[200px]" title={k['Keyword']}>{k['Keyword']}</td>
+                    <td className="py-2 px-3 text-right font-semibold" style={{ color: '#5b4bff' }}>{fmt(k['Clics'])}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{Number(k['Posición Promedio']).toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Movimientos */}
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+              <span>📈</span> Movimientos de Posición
+            </h3>
+            <p className="text-xs text-slate-500">Subidas y caídas más relevantes</p>
+          </div>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {seoComputed.subidas.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1">
+                  🚀 SUBIDAS ({seoComputed.subidas.length})
+                </div>
+                <div className="space-y-1.5">
+                  {seoComputed.subidas.slice(0, 8).map((m, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-emerald-50/60 border border-emerald-100 text-sm">
+                      <span className="text-slate-700 truncate max-w-[180px]" title={m['Keyword']}>{m['Keyword']}</span>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500">{Number(m['Pos. Anterior (7d)']).toFixed(0)} → {Number(m['Pos. Actual (7d)']).toFixed(0)}</span>
+                        <span className="font-semibold text-emerald-700 px-2 py-0.5 rounded-full bg-emerald-100">+{Number(m['Cambio']).toFixed(0)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {seoComputed.caidas.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">
+                  📉 CAÍDAS ({seoComputed.caidas.length})
+                </div>
+                <div className="space-y-1.5">
+                  {seoComputed.caidas.slice(0, 8).map((m, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-red-50/60 border border-red-100 text-sm">
+                      <span className="text-slate-700 truncate max-w-[180px]" title={m['Keyword']}>{m['Keyword']}</span>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500">{Number(m['Pos. Anterior (7d)']).toFixed(0)} → {Number(m['Pos. Actual (7d)']).toFixed(0)}</span>
+                        <span className="font-semibold text-red-700 px-2 py-0.5 rounded-full bg-red-100">{Number(m['Cambio']).toFixed(0)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Top URLs SEO */}
+      {seoComputed.topPaginas.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+              <span>🌐</span> Top URLs por Tráfico SEO
+            </h3>
+            <p className="text-xs text-slate-500">Páginas con más tráfico orgánico</p>
+          </div>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-3 font-semibold">URL</th>
+                  <th className="py-2 px-3 text-right font-semibold">Clics</th>
+                  <th className="py-2 px-3 text-right font-semibold">Impr.</th>
+                  <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                  <th className="py-2 px-3 text-right font-semibold">Pos.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {seoComputed.topPaginas.map((p, i) => {
+                  const urlDisplay = String(p['URL'] || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+                  return (
+                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                      <td className="py-2 px-3 font-mono text-xs text-slate-700 truncate max-w-[300px]" title={p['URL']}>{urlDisplay}</td>
+                      <td className="py-2 px-3 text-right font-semibold" style={{ color: '#5b4bff' }}>{fmt(p['Clics'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(p['Impresiones'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{p['CTR (%)']}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{Number(p['Posición Promedio']).toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -538,7 +959,8 @@ function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, tren
     setMessages(updatedMessages); setInputValue(''); setError(''); setLoading(true);
 
     const dataContext = buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, trendData);
-    const systemPrompt = `Eres un experto analista de marketing digital y Google Analytics 4 que ayuda al cliente "${currentClient?.nombre}".
+    const tieneSEO = dataContext.seo?.disponible;
+    const systemPrompt = `Eres un experto analista de marketing digital, Google Analytics 4 y SEO (Google Search Console) que ayuda al cliente "${currentClient?.nombre}".
 
 DATOS COMPLETOS DEL CLIENTE:
 ${JSON.stringify(dataContext, null, 2)}
@@ -546,15 +968,24 @@ ${JSON.stringify(dataContext, null, 2)}
 ⚠️ IMPORTANTE — TIENES ACCESO A:
 - KPIs agregados del período seleccionado
 - Detalle DÍA POR DÍA en el array "datosDiarios"
-- Top canales, fuentes, países, ciudades, páginas, dispositivos, eventos
+- Top canales, fuentes, países, ciudades, páginas, dispositivos, eventos${tieneSEO ? `
+- 🔍 DATOS SEO COMPLETOS de Google Search Console en el objeto "seo":
+  • Totales (clics, impresiones, CTR, posición promedio, total de keywords)
+  • "quickWins": keywords en posición 5-15 con +100 impresiones (oportunidades top)
+  • "topKeywords": las 30 keywords con más clics
+  • "subidas" y "caidas": movimientos de posición más relevantes
+  • "topPaginas": URLs con más tráfico orgánico segmentadas por sección
+  • "tendenciaDiaria": clics/impresiones/posición día por día (últimos 40 días)` : ''}
 
 INSTRUCCIONES:
 - Responde SIEMPRE en español
 - Tono profesional pero amigable
 - Usa formato Markdown
-- Cita datos específicos
+- Cita datos específicos (números reales del JSON)
 - NO inventes datos
-- Sé directo y práctico`;
+- Sé directo y práctico${tieneSEO ? `
+- Para preguntas SEO, prioriza Quick Wins, analiza caídas con causa probable y sugiere acciones concretas (mejorar title, contenido, snippets)
+- Distingue entre "tráfico SEO" (orgánico, del objeto seo) y "tráfico GA4" (todos los canales)` : ''}`;
 
     const apiMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
 
@@ -716,6 +1147,7 @@ function Dashboard({ session, onLogout }) {
   const [sections, setSections] = useState({
     aiChat: true,
     funnel: true,  // 🆕 Funnel abierto por defecto
+    seo: true,     // 🔍 SEO abierto por defecto
     acquisition: true,
     audience: true,
     behavior: true,
@@ -1129,6 +1561,14 @@ function Dashboard({ session, onLogout }) {
             {sections.funnel && (
               <div className="mb-6">
                 <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} />
+              </div>
+            )}
+
+            {/* 🔍 SEO — Google Search Console */}
+            <SectionHeader title="SEO Orgánico" subtitle="Datos de Google Search Console — keywords, posiciones y oportunidades" icon={Search} sectionKey="seo" badge={liveData?.seo?.disponible ? '🔍 GSC' : '🔜 Pronto'} />
+            {sections.seo && (
+              <div className="mb-6">
+                <SEOSection liveData={liveData} currentClient={currentClient} />
               </div>
             )}
 
