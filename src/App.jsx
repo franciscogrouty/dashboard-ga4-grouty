@@ -343,7 +343,6 @@ function SEOSection({ liveData, currentClient }) {
     const tendencia = seoData.tendenciaSEO || [];
     const movimientos = seoData.posicionesSEO || [];
 
-    // KPIs totales
     const totalClics = keywords.reduce((s, k) => s + (Number(k['Clics']) || 0), 0);
     const totalImpresiones = keywords.reduce((s, k) => s + (Number(k['Impresiones']) || 0), 0);
     const ctrPromedio = totalImpresiones > 0 ? ((totalClics / totalImpresiones) * 100) : 0;
@@ -351,19 +350,16 @@ function SEOSection({ liveData, currentClient }) {
       ? (keywords.reduce((s, k) => s + (Number(k['Posición Promedio']) || 0), 0) / keywords.length)
       : 0;
 
-    // Quick Wins: posición 5-15 + impresiones >= 100
     const quickWins = keywords.filter(k => {
       const pos = Number(k['Posición Promedio']) || 999;
       const impr = Number(k['Impresiones']) || 0;
       return pos >= 5 && pos <= 15 && impr >= 100;
     }).sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0)).slice(0, 25);
 
-    // Top Keywords (por clics)
     const topKeywords = [...keywords]
       .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
       .slice(0, 25);
 
-    // Movimientos
     const subidas = movimientos.filter(m => (Number(m['Cambio']) || 0) > 0)
       .sort((a, b) => (Number(b['Cambio']) || 0) - (Number(a['Cambio']) || 0))
       .slice(0, 15);
@@ -371,12 +367,10 @@ function SEOSection({ liveData, currentClient }) {
       .sort((a, b) => (Number(a['Cambio']) || 0) - (Number(b['Cambio']) || 0))
       .slice(0, 15);
 
-    // Top Páginas
     const topPaginas = [...paginas]
       .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
       .slice(0, 20);
 
-    // Tendencia diaria — últimos 40 días
     const trendData = tendencia.slice(-40).map(t => ({
       fecha: String(t['Fecha'] || '').slice(5, 10),
       fechaCompleta: String(t['Fecha'] || '').slice(0, 10),
@@ -414,7 +408,6 @@ function SEOSection({ liveData, currentClient }) {
 
   return (
     <div className="space-y-6">
-      {/* KPIs SEO */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
@@ -464,7 +457,6 @@ function SEOSection({ liveData, currentClient }) {
         </div>
       </div>
 
-      {/* Gráfico tendencia diaria */}
       {seoComputed.trendData.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -501,7 +493,6 @@ function SEOSection({ liveData, currentClient }) {
         </div>
       )}
 
-      {/* Quick Wins */}
       {seoComputed.quickWins.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -543,9 +534,7 @@ function SEOSection({ liveData, currentClient }) {
         </div>
       )}
 
-      {/* Grid: Top Keywords + Movimientos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Top Keywords */}
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="mb-4">
             <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
@@ -575,7 +564,6 @@ function SEOSection({ liveData, currentClient }) {
           </div>
         </div>
 
-        {/* Movimientos */}
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="mb-4">
             <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
@@ -624,7 +612,6 @@ function SEOSection({ liveData, currentClient }) {
         </div>
       </div>
 
-      {/* Top URLs SEO */}
       {seoComputed.topPaginas.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="mb-4">
@@ -667,7 +654,7 @@ function SEOSection({ liveData, currentClient }) {
 }
 
 // =============================================
-// 🎯 FUNNEL DE CONVERSIÓN — NUEVO COMPONENTE
+// 🎯 FUNNEL DE CONVERSIÓN
 // =============================================
 function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange, trendData }) {
   const [hoveredStep, setHoveredStep] = useState(null);
@@ -675,9 +662,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
   const funnelData = useMemo(() => {
     if (!liveData?.eventos) return null;
 
-    // ============================================
-    // 1️⃣ AGREGAR EVENTOS DEL PERÍODO ACTUAL
-    // ============================================
     const eventosAgregados = {};
     liveData.eventos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
       const ev = row['Nombre del Evento'] || '';
@@ -690,26 +674,18 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       eventosAgregados[ev].valor += valor;
     });
 
-    // ============================================
-    // 2️⃣ DETECTAR MODO B2B vs B2C AUTOMÁTICAMENTE
-    // ============================================
     const checkoutEvents = ['begin_checkout', 'add_to_cart', 'purchase', 'add_payment_info', 'add_shipping_info'];
     const leadEvents = ['form_submit', 'generate_lead', 'contact', 'phone_click', 'whatsapp_click', 'email_click', 'sign_up', 'click_to_call'];
 
     const tieneCheckout = checkoutEvents.some(ev => (eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo) > 0);
     const tieneLeads = leadEvents.some(ev => (eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo) > 0);
 
-    // Si tiene checkout → modo B2C completo. Si solo tiene leads → B2B. Si tiene ambos → B2C (prioridad).
-    const modo = tieneCheckout ? 'b2c' : (tieneLeads ? 'b2b' : 'b2b'); // default B2B si no hay nada
+    const modo = tieneCheckout ? 'b2c' : (tieneLeads ? 'b2b' : 'b2b');
 
-    // Datos comunes
     const sesiones = kpis.sesiones || 0;
     const sesionesEng = kpis.sesionesEng || 0;
     const scrollUsers = eventosAgregados['scroll']?.usuarios || 0;
 
-    // ============================================
-    // 3️⃣ CONSTRUIR PASOS SEGÚN MODO
-    // ============================================
     let pasos = [];
     let purchaseValor = 0;
 
@@ -726,7 +702,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
         { nombre: 'Compra', descripcion: 'Completaron la compra', valor: purchase, icon: CreditCard, color: GORUTY.deepPurple, emoji: '💰' }
       ];
     } else {
-      // Modo B2B — sumar todos los eventos de leads
       let leadsCount = 0;
       const leadsEventosUsados = [];
       leadEvents.forEach(ev => {
@@ -745,9 +720,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       ];
     }
 
-    // ============================================
-    // 4️⃣ CALCULAR % VS TOTAL Y VS ANTERIOR
-    // ============================================
     const total = sesiones || 1;
     const pasosCalc = pasos.map((paso, idx) => {
       const pct = total ? (paso.valor / total) * 100 : 0;
@@ -757,17 +729,12 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       return { ...paso, pct, pctAnterior, dropOff, perdidos };
     });
 
-    // ============================================
-    // 5️⃣ COMPARATIVA CON PERÍODO ANTERIOR
-    // ============================================
-    // Calcular las fechas del período anterior basándose en el dateRange
     let comparativa = null;
     if (trendData && trendData.length > 0 && dateRange !== 'all') {
       const fechasOrdenadas = trendData.map(d => d.fechaCompleta).filter(Boolean).sort();
       const primeraFecha = fechasOrdenadas[0];
       const diasPeriodo = trendData.length;
 
-      // Calcular fecha de inicio del período anterior
       const fechaInicio = new Date(primeraFecha);
       const fechaFinAnterior = new Date(fechaInicio);
       fechaFinAnterior.setDate(fechaFinAnterior.getDate() - 1);
@@ -778,21 +745,18 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       const inicioAntStr = fmtDate(fechaInicioAnterior);
       const finAntStr = fmtDate(fechaFinAnterior);
 
-      // Filtro para el período anterior
       const enPeriodoAnterior = (fechaRaw) => {
         if (!fechaRaw) return false;
         const f = String(fechaRaw).slice(0, 10);
         return f >= inicioAntStr && f <= finAntStr;
       };
 
-      // Sumar sesiones y engagement del período anterior usando resumenDiario
       let sesionesAnt = 0, sesionesEngAnt = 0;
       (liveData.resumenDiario || []).filter(row => enPeriodoAnterior(row['Fecha'])).forEach(row => {
         sesionesAnt += Number(row['Sesiones']) || 0;
         sesionesEngAnt += Number(row['Sesiones Comprometidas']) || 0;
       });
 
-      // Sumar eventos del período anterior
       const eventosAnteriores = {};
       liveData.eventos.filter(row => enPeriodoAnterior(row['Fecha'])).forEach(row => {
         const ev = row['Nombre del Evento'] || '';
@@ -816,7 +780,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
         valoresAnt['Leads / Contacto'] = leadsAnt;
       }
 
-      // Anexar comparativa a cada paso
       pasosCalc.forEach(paso => {
         const valorAnt = valoresAnt[paso.nombre] || 0;
         if (valorAnt > 0) {
@@ -856,7 +819,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
   const valorPorSesion = total ? (purchaseValor / total) : 0;
   const ultimoPaso = pasos[pasos.length - 1];
 
-  // Helper para mostrar cambio %
   const renderCambio = (cambio) => {
     if (cambio === undefined || cambio === null) return null;
     const positivo = cambio > 0;
@@ -873,7 +835,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
 
   return (
     <div className="space-y-6">
-      {/* Banner de modo detectado */}
       <div className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl border" style={{ backgroundColor: modo === 'b2c' ? '#5b4bff10' : '#10b98110', borderColor: modo === 'b2c' ? '#5b4bff30' : '#10b98130' }}>
         <div className="flex items-center gap-2">
           <span className="text-base">{modo === 'b2c' ? '🛒' : '📧'}</span>
@@ -893,7 +854,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
         )}
       </div>
 
-      {/* Métricas resumen del funnel */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white border border-violet-100 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1 font-medium">🎯 Tasa Conversión Global</div>
@@ -938,7 +898,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
         </div>
       </div>
 
-      {/* FUNNEL VISUAL — barras horizontales en forma de embudo */}
       <div className="bg-white border border-violet-100 rounded-xl p-6 shadow-sm">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-sm font-semibold text-slate-800">🎯 Etapas del Funnel</h3>
@@ -957,7 +916,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
 
             return (
               <div key={idx}>
-                {/* Indicador de drop-off / conversión entre etapas */}
                 {drop && (
                   <div className="flex items-center justify-center my-1.5 gap-3">
                     <div className="flex items-center gap-1 text-[10px] font-semibold text-rose-500">
@@ -976,7 +934,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
                   onMouseEnter={() => setHoveredStep(idx)}
                   onMouseLeave={() => setHoveredStep(null)}
                 >
-                  {/* Icono y nombre */}
                   <div className="flex items-center gap-2 w-44 flex-shrink-0">
                     <div className="p-1.5 rounded-md flex-shrink-0" style={{ backgroundColor: `${paso.color}20` }}>
                       <Icon className="w-3.5 h-3.5" style={{ color: paso.color }} />
@@ -987,7 +944,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
                     </div>
                   </div>
 
-                  {/* Barra del funnel */}
                   <div className="flex-1 relative h-12 bg-slate-50 rounded-lg overflow-hidden">
                     <div
                       className="h-full flex items-center justify-between px-4 transition-all duration-500 rounded-lg"
@@ -1005,7 +961,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
                     )}
                   </div>
 
-                  {/* % vs paso anterior + cambio vs período */}
                   {!isFirst && (
                     <div className="w-28 text-right flex-shrink-0">
                       <div className="text-xs font-bold" style={{ color: paso.pctAnterior > 50 ? GORUTY.success : (paso.pctAnterior > 10 ? GORUTY.warning : GORUTY.danger) }}>
@@ -1024,7 +979,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
                     </div>
                   )}
 
-                  {/* TOOLTIP enriquecido */}
                   {hoveredStep === idx && (
                     <div className="absolute left-44 top-full mt-2 z-50 bg-slate-900 text-white rounded-xl p-4 shadow-2xl min-w-[280px] pointer-events-none" style={{ marginLeft: '8px' }}>
                       <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
@@ -1077,7 +1031,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
         </div>
       </div>
 
-      {/* Tabla de detalle */}
       <div className="bg-white border border-violet-100 rounded-xl p-5 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-800 mb-4">📋 Detalle por Etapa</h3>
         <div className="overflow-x-auto">
@@ -1128,7 +1081,8 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
 }
 
 // =============================================
-// 💬 CHAT CONVERSACIONAL (sin cambios)
+// 💬 CHAT CONVERSACIONAL
+// 🔧 CAMBIO 1: max-h-[600px] → max-h-[320px] (mitad, sigue scrollable)
 // =============================================
 function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, trendData }) {
   const [messages, setMessages] = useState([]);
@@ -1217,13 +1171,14 @@ INSTRUCCIONES:
         {messages.length > 0 && (<button onClick={clearChat} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition text-slate-600 hover:text-rose-600 hover:bg-rose-50 font-medium border border-slate-200 hover:border-rose-200"><Trash2 className="w-3.5 h-3.5" />Nueva conversación</button>)}
       </div>
 
-      <div className="p-5 max-h-[600px] overflow-y-auto">
+      {/* 🔧 CAMBIO 1 APLICADO: max-h-[600px] → max-h-[320px] (la mitad) */}
+      <div className="p-5 max-h-[320px] overflow-y-auto">
         {messages.length === 0 && !loading && (
-          <div className="text-center py-8">
-            <div className="flex justify-center mb-4"><div className="p-4 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}><MessageSquare className="w-8 h-8" style={{ color: GORUTY.primary }} /></div></div>
-            <p className="text-sm text-slate-700 font-semibold mb-2">¡Hola! Soy Claude 👋</p>
-            <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">Tengo acceso a todos los datos GA4 de <strong>{currentClient?.nombre}</strong>, incluyendo el detalle día por día y el funnel de conversión.</p>
-            <p className="text-xs text-slate-400 mt-4">Escribe tu pregunta abajo para empezar</p>
+          <div className="text-center py-6">
+            <div className="flex justify-center mb-3"><div className="p-3 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}><MessageSquare className="w-6 h-6" style={{ color: GORUTY.primary }} /></div></div>
+            <p className="text-sm text-slate-700 font-semibold mb-1">¡Hola! Soy Claude 👋</p>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">Tengo acceso a todos los datos GA4 y SEO (Search Console) de <strong>{currentClient?.nombre}</strong>.</p>
+            <p className="text-[11px] text-slate-400 mt-2">Escribe tu pregunta abajo para empezar</p>
           </div>
         )}
         {messages.map((msg, idx) => (
@@ -1337,14 +1292,15 @@ function Dashboard({ session, onLogout }) {
 
   useEffect(() => { if (Object.keys(clientCache).length === 0) handleRefresh(); /* eslint-disable-next-line */ }, []);
 
+  // 🔧 CAMBIOS 2 + 4: TODAS las pestañas comprimidas al inicio (incluido aiChat)
   const [sections, setSections] = useState({
-    aiChat: true,
-    funnel: true,  // 🆕 Funnel abierto por defecto
-    seo: true,     // 🔍 SEO abierto por defecto
-    acquisition: true,
-    audience: true,
-    behavior: true,
-    engagement: true,
+    aiChat: false,    // 🔧 CAMBIO 4: chat parte comprimido
+    funnel: false,    // 🔧 CAMBIO 2: comprimido
+    seo: false,       // 🔧 CAMBIO 2: comprimido
+    acquisition: false,
+    audience: false,
+    behavior: false,
+    engagement: false,
     events: false,
     advanced: false,
   });
@@ -1690,6 +1646,16 @@ function Dashboard({ session, onLogout }) {
               <div className="mt-3 text-xs text-slate-500">Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos{dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}</div>
             </div>
 
+            {/* 🔧 CAMBIO 3 APLICADO: Chat con Claude MOVIDO ARRIBA — antes de los KPIs */}
+            {/* 🔒 CHAT IA — SOLO ADMIN — Ahora aparece arriba de los 12 KPIs */}
+            {isAdmin && (
+              <>
+                <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" />
+                {sections.aiChat && (<div className="mb-6"><AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} /></div>)}
+              </>
+            )}
+
+            {/* 12 KPIs — quedan abajo del Chat */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
               <KpiCard icon={Users} label="Usuarios Activos" value={fmt(kpis.usuarios)} accentColor={GORUTY.primary} trend={8.4} />
               <KpiCard icon={Users} label="Usuarios Nuevos" value={fmt(kpis.usuariosNuevos)} accentColor={GORUTY.secondary} trend={6.2} />
@@ -1706,14 +1672,6 @@ function Dashboard({ session, onLogout }) {
               <KpiCard icon={Activity} label="Sesiones Comp." value={fmt(kpis.sesionesEng)} accentColor={GORUTY.accent} />
               <KpiCard icon={Target} label="Tasa Conv." value={`${kpis.tasaConversionSesion}%`} accentColor={GORUTY.deepPurple} />
             </div>
-
-            {/* 🔒 CHAT IA — SOLO ADMIN */}
-            {isAdmin && (
-              <>
-                <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" />
-                {sections.aiChat && (<div className="mb-6"><AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} /></div>)}
-              </>
-            )}
 
             <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
               <ResponsiveContainer width="100%" height={320}>
@@ -1749,7 +1707,6 @@ function Dashboard({ session, onLogout }) {
               </ResponsiveContainer>
             </Panel>
 
-            {/* 🎯 FUNNEL DE CONVERSIÓN — MOVIDO AQUÍ (después de los gráficos de tendencia) */}
             <SectionHeader title="Funnel de Conversión" subtitle="Recorrido del usuario desde sesión hasta compra" icon={Target} sectionKey="funnel" badge="🎯 Nuevo" />
             {sections.funnel && (
               <div className="mb-6">
@@ -1757,7 +1714,6 @@ function Dashboard({ session, onLogout }) {
               </div>
             )}
 
-            {/* 🔍 SEO — Google Search Console */}
             <SectionHeader title="SEO Orgánico" subtitle="Datos de Google Search Console — keywords, posiciones y oportunidades" icon={Search} sectionKey="seo" badge={liveData?.seo?.disponible ? '🔍 GSC' : '🔜 Pronto'} />
             {sections.seo && (
               <div className="mb-6">
