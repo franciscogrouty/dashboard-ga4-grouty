@@ -1560,14 +1560,14 @@ function Dashboard({ session, onLogout }) {
   useEffect(() => { if (Object.keys(clientCache).length === 0) handleRefresh(); /* eslint-disable-next-line */ }, []);
 
   const [sections, setSections] = useState({
-    aiChat: true,
-    funnel: true,
-    seo: true,
-    paidMedia: true,  // 🆕 Paid Media abierto por defecto
-    acquisition: true,
-    audience: true,
-    behavior: true,
-    engagement: true,
+    aiChat: false,
+    funnel: false,
+    seo: false,
+    paidMedia: false,
+    acquisition: false,
+    audience: false,
+    behavior: false,
+    engagement: false,
     events: false,
     advanced: false,
   });
@@ -1889,7 +1889,7 @@ function Dashboard({ session, onLogout }) {
           <div className="bg-white border border-violet-100 rounded-2xl p-12 text-center shadow-sm">
             <div className="flex justify-center mb-4"><RefreshCw className="w-12 h-12 animate-spin" style={{ color: GORUTY.primary }} /></div>
             <h2 className="text-lg font-semibold text-slate-900 mb-1">Cargando {refreshProgress.total > 0 ? `${refreshProgress.current} de ${refreshProgress.total} clientes` : 'datos'}...</h2>
-            <p className="text-sm text-slate-500">Estamos obteniendo los datos de Google Analytics</p>
+            <p className="text-sm text-slate-500">Estamos obteniendo los datos de la nube de Grouty</p>
           </div>
         )}
 
