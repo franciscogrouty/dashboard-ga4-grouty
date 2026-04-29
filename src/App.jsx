@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, FunnelChart, Funnel, LabelList } from 'recharts';
 import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight, Search, Megaphone, Ban, Award, Image as ImageIcon, MapPin } from 'lucide-react';
 
@@ -1445,7 +1445,7 @@ INSTRUCCIONES:
         {messages.length > 0 && (<button onClick={clearChat} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition text-slate-600 hover:text-rose-600 hover:bg-rose-50 font-medium border border-slate-200 hover:border-rose-200"><Trash2 className="w-3.5 h-3.5" />Nueva conversación</button>)}
       </div>
 
-      <div className="p-5 max-h-[600px] overflow-y-auto">
+      <div className="p-5 max-h-[240px] overflow-y-auto">
         {messages.length === 0 && !loading && (
           <div className="text-center py-8">
             <div className="flex justify-center mb-4"><div className="p-4 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}><MessageSquare className="w-8 h-8" style={{ color: GORUTY.primary }} /></div></div>
@@ -1495,6 +1495,42 @@ INSTRUCCIONES:
     </div>
   );
 }
+
+// =============================================
+// 🧩 COMPONENTES UI REUTILIZABLES (fuera de Dashboard para evitar remounts)
+// =============================================
+const KpiCard = ({ icon: Icon, label, value, accentColor = GORUTY.primary, trend }) => (
+  <div className="bg-white border border-violet-100 rounded-xl p-4 hover:border-violet-300 hover:shadow-md hover:shadow-violet-100 transition-all">
+    <div className="flex items-start justify-between mb-2">
+      <div className="p-2 rounded-lg" style={{ backgroundColor: `${accentColor}15` }}><Icon className="w-4 h-4" style={{ color: accentColor }} /></div>
+      {trend !== undefined && (<span className={`text-xs font-semibold ${trend > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%</span>)}
+    </div>
+    <div className="text-xs text-slate-500 mb-1 font-medium">{label}</div>
+    <div className="text-2xl font-bold text-slate-900">{value}</div>
+  </div>
+);
+
+const SectionHeader = ({ title, icon: Icon, sectionKey, subtitle, badge, sections, toggleSection }) => (
+  <button
+    type="button"
+    onClick={(e) => { e.preventDefault(); toggleSection(sectionKey); }}
+    onMouseDown={(e) => e.preventDefault()}
+    className="w-full flex items-center justify-between py-3 px-4 bg-white border border-violet-100 hover:border-violet-300 rounded-lg mb-4 transition-all"
+  >
+    <div className="flex items-center gap-3">
+      <div className="p-1.5 rounded-md" style={{ backgroundColor: `${GORUTY.primary}15` }}><Icon className="w-4 h-4" style={{ color: GORUTY.primary }} /></div>
+      <div className="text-left">
+        <div className="text-slate-900 font-semibold flex items-center gap-2">{title}{badge && <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>{badge}</span>}</div>
+        {subtitle && <div className="text-xs text-slate-500">{subtitle}</div>}
+      </div>
+    </div>
+    {sections[sectionKey] ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+  </button>
+);
+
+const Panel = ({ title, children, className = '' }) => (
+  <div className={`bg-white border border-violet-100 rounded-xl p-5 shadow-sm ${className}`}><h3 className="text-sm font-semibold text-slate-800 mb-4">{title}</h3>{children}</div>
+);
 
 function Dashboard({ session, onLogout }) {
   const [dateRange, setDateRange] = useState('all');
@@ -1572,7 +1608,7 @@ function Dashboard({ session, onLogout }) {
     advanced: false,
   });
 
-  const toggleSection = (key) => setSections({ ...sections, [key]: !sections[key] });
+  const toggleSection = useCallback((key) => setSections(prev => ({ ...prev, [key]: !prev[key] })), []);
   const chartColors = [GORUTY.primary, GORUTY.secondary, GORUTY.tertiary, GORUTY.accent, GORUTY.deepPurple, GORUTY.light, GORUTY.pink];
 
   const allTrendData = useMemo(() => {
@@ -1773,34 +1809,6 @@ function Dashboard({ session, onLogout }) {
   const fmtTime = (s) => `${Math.floor(s / 60)}m ${s % 60}s`;
   const fmtMoney = (n) => `$${(n / 1000000).toFixed(1)}M`;
 
-  const KpiCard = ({ icon: Icon, label, value, accentColor = GORUTY.primary, trend }) => (
-    <div className="bg-white border border-violet-100 rounded-xl p-4 hover:border-violet-300 hover:shadow-md hover:shadow-violet-100 transition-all">
-      <div className="flex items-start justify-between mb-2">
-        <div className="p-2 rounded-lg" style={{ backgroundColor: `${accentColor}15` }}><Icon className="w-4 h-4" style={{ color: accentColor }} /></div>
-        {trend !== undefined && (<span className={`text-xs font-semibold ${trend > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%</span>)}
-      </div>
-      <div className="text-xs text-slate-500 mb-1 font-medium">{label}</div>
-      <div className="text-2xl font-bold text-slate-900">{value}</div>
-    </div>
-  );
-
-  const SectionHeader = ({ title, icon: Icon, sectionKey, subtitle, badge }) => (
-    <button onClick={() => toggleSection(sectionKey)} className="w-full flex items-center justify-between py-3 px-4 bg-white border border-violet-100 hover:border-violet-300 rounded-lg mb-4 transition-all">
-      <div className="flex items-center gap-3">
-        <div className="p-1.5 rounded-md" style={{ backgroundColor: `${GORUTY.primary}15` }}><Icon className="w-4 h-4" style={{ color: GORUTY.primary }} /></div>
-        <div className="text-left">
-          <div className="text-slate-900 font-semibold flex items-center gap-2">{title}{badge && <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>{badge}</span>}</div>
-          {subtitle && <div className="text-xs text-slate-500">{subtitle}</div>}
-        </div>
-      </div>
-      {sections[sectionKey] ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
-    </button>
-  );
-
-  const Panel = ({ title, children, className = '' }) => (
-    <div className={`bg-white border border-violet-100 rounded-xl p-5 shadow-sm ${className}`}><h3 className="text-sm font-semibold text-slate-800 mb-4">{title}</h3>{children}</div>
-  );
-
   const tooltipStyle = { contentStyle: { backgroundColor: '#fff', border: `1px solid ${GORUTY.light}`, borderRadius: '8px', color: '#1e293b', boxShadow: '0 10px 15px -3px rgba(91, 75, 255, 0.1)' }, labelStyle: { color: '#64748b', fontWeight: 600 } };
 
   const hasDataForActiveClient = !!liveData;
@@ -1913,6 +1921,15 @@ function Dashboard({ session, onLogout }) {
               <div className="mt-3 text-xs text-slate-500">Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos{dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}</div>
             </div>
 
+            {/* 💬 CHAT CON CLAUDE — POSICIONADO ARRIBA DE LOS KPIs (solo admin) */}
+            {isAdmin && (
+              <div className="mb-6">
+                <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
+                {sections.aiChat && (<AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} />)}
+              </div>
+            )}
+
+            {/* 📊 KPIs PRINCIPALES — primer grid (6 cards) */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
               <KpiCard icon={Users} label="Usuarios Activos" value={fmt(kpis.usuarios)} accentColor={GORUTY.primary} trend={8.4} />
               <KpiCard icon={Users} label="Usuarios Nuevos" value={fmt(kpis.usuariosNuevos)} accentColor={GORUTY.secondary} trend={6.2} />
@@ -1929,13 +1946,6 @@ function Dashboard({ session, onLogout }) {
               <KpiCard icon={Activity} label="Sesiones Comp." value={fmt(kpis.sesionesEng)} accentColor={GORUTY.accent} />
               <KpiCard icon={Target} label="Tasa Conv." value={`${kpis.tasaConversionSesion}%`} accentColor={GORUTY.deepPurple} />
             </div>
-
-            {isAdmin && (
-              <>
-                <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" />
-                {sections.aiChat && (<div className="mb-6"><AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} /></div>)}
-              </>
-            )}
 
             <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
               <ResponsiveContainer width="100%" height={320}>
@@ -1971,7 +1981,7 @@ function Dashboard({ session, onLogout }) {
               </ResponsiveContainer>
             </Panel>
 
-            <SectionHeader title="Funnel de Conversión" subtitle="Recorrido del usuario desde sesión hasta compra" icon={Target} sectionKey="funnel" badge="🎯 Nuevo" />
+            <SectionHeader title="Funnel de Conversión" subtitle="Recorrido del usuario desde sesión hasta compra" icon={Target} sectionKey="funnel" badge="🎯 Nuevo" sections={sections} toggleSection={toggleSection} />
             {sections.funnel && (
               <div className="mb-6">
                 <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} dateRange={dateRange} trendData={trendData} />
@@ -1979,21 +1989,21 @@ function Dashboard({ session, onLogout }) {
             )}
 
             {/* 🆕 PAID MEDIA — Google Ads / Meta / LinkedIn */}
-            <SectionHeader title="Paid Media" subtitle="Performance de campañas pagadas — Google Ads, Meta, LinkedIn" icon={Megaphone} sectionKey="paidMedia" badge={liveData?.googleAds?.disponible ? '📢 Ads' : '🔜 Pronto'} />
+            <SectionHeader title="Paid Media" subtitle="Performance de campañas pagadas — Google Ads, Meta, LinkedIn" icon={Megaphone} sectionKey="paidMedia" badge={liveData?.googleAds?.disponible ? '📢 Ads' : '🔜 Pronto'} sections={sections} toggleSection={toggleSection} />
             {sections.paidMedia && (
               <div className="mb-6">
                 <PaidMediaSection liveData={liveData} currentClient={currentClient} />
               </div>
             )}
 
-            <SectionHeader title="SEO Orgánico" subtitle="Datos de Google Search Console — keywords, posiciones y oportunidades" icon={Search} sectionKey="seo" badge={liveData?.seo?.disponible ? '🔍 GSC' : '🔜 Pronto'} />
+            <SectionHeader title="SEO Orgánico" subtitle="Datos de Google Search Console — keywords, posiciones y oportunidades" icon={Search} sectionKey="seo" badge={liveData?.seo?.disponible ? '🔍 GSC' : '🔜 Pronto'} sections={sections} toggleSection={toggleSection} />
             {sections.seo && (
               <div className="mb-6">
                 <SEOSection liveData={liveData} currentClient={currentClient} />
               </div>
             )}
 
-            <SectionHeader title="Adquisición" subtitle="Canales y fuentes" icon={TrendingUp} sectionKey="acquisition" />
+            <SectionHeader title="Adquisición" subtitle="Canales y fuentes" icon={TrendingUp} sectionKey="acquisition" sections={sections} toggleSection={toggleSection} />
             {sections.acquisition && canalesData.length > 0 && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <Panel title="Usuarios por Canal">
@@ -2018,7 +2028,7 @@ function Dashboard({ session, onLogout }) {
               </div>
             )}
 
-            <SectionHeader title="Audiencia" subtitle="Ubicación y dispositivos" icon={Globe} sectionKey="audience" />
+            <SectionHeader title="Audiencia" subtitle="Ubicación y dispositivos" icon={Globe} sectionKey="audience" sections={sections} toggleSection={toggleSection} />
             {sections.audience && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 {paisesData.length > 0 && (<Panel title="Usuarios por País" className="lg:col-span-2"><ResponsiveContainer width="100%" height={260}><BarChart data={paisesData}><CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" /><XAxis dataKey="pais" stroke="#64748b" style={{ fontSize: 10 }} angle={-15} textAnchor="end" height={70} /><YAxis stroke="#94a3b8" style={{ fontSize: 11 }} /><Tooltip {...tooltipStyle} /><Bar dataKey="usuarios" fill={GORUTY.primary} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></Panel>)}
@@ -2029,7 +2039,7 @@ function Dashboard({ session, onLogout }) {
               </div>
             )}
 
-            <SectionHeader title="Comportamiento" subtitle="Páginas más vistas" icon={Eye} sectionKey="behavior" />
+            <SectionHeader title="Comportamiento" subtitle="Páginas más vistas" icon={Eye} sectionKey="behavior" sections={sections} toggleSection={toggleSection} />
             {sections.behavior && paginasData.length > 0 && (
               <Panel title="Páginas Más Vistas" className="mb-6">
                 <div className="overflow-x-auto">
@@ -2041,7 +2051,7 @@ function Dashboard({ session, onLogout }) {
               </Panel>
             )}
 
-            <SectionHeader title="Eventos" subtitle="Conteo de eventos" icon={MousePointer} sectionKey="events" />
+            <SectionHeader title="Eventos" subtitle="Conteo de eventos" icon={MousePointer} sectionKey="events" sections={sections} toggleSection={toggleSection} />
             {sections.events && eventosData.length > 0 && (
               <Panel title="Top Eventos" className="mb-6">
                 <div className="overflow-x-auto">
