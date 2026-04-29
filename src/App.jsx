@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, FunnelChart, Funnel, LabelList } from 'recharts';
-import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight, Search } from 'lucide-react';
+import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight, Search, Megaphone, Ban, Award, Image as ImageIcon, MapPin } from 'lucide-react';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUkLrgfuo1k-RuTPc7VtVrlenEv58LTMAP07l-CxPpgcCqtVw/exec';
 
@@ -135,7 +135,7 @@ function buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, t
       return acc;
     }, []).sort((a, b) => b.conteo - a.conteo).slice(0, 25),
 
-    // 🔍 CONTEXTO SEO (si está disponible)
+    // 🔍 CONTEXTO SEO
     seo: (() => {
       const seoData = liveData?.seo;
       if (!seoData?.disponible) return { disponible: false };
@@ -169,52 +169,126 @@ function buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, t
           posicion: Number(k['Posición Promedio']) || 0
         }));
 
-      const subidas = movimientos.filter(m => {
-        const cambio = Number(m['Cambio']) || 0;
-        return cambio > 0;
-      }).sort((a, b) => (Number(b['Cambio']) || 0) - (Number(a['Cambio']) || 0)).slice(0, 10).map(m => ({
-        keyword: m['Keyword'],
-        posActual: Number(m['Pos. Actual (7d)']) || 0,
-        posAnterior: Number(m['Pos. Anterior (7d)']) || 0,
-        cambio: Number(m['Cambio']) || 0
-      }));
-
-      const caidas = movimientos.filter(m => {
-        const cambio = Number(m['Cambio']) || 0;
-        return cambio < 0;
-      }).sort((a, b) => (Number(a['Cambio']) || 0) - (Number(b['Cambio']) || 0)).slice(0, 10).map(m => ({
-        keyword: m['Keyword'],
-        posActual: Number(m['Pos. Actual (7d)']) || 0,
-        posAnterior: Number(m['Pos. Anterior (7d)']) || 0,
-        cambio: Number(m['Cambio']) || 0
-      }));
-
-      const topPaginas = [...paginas]
-        .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
-        .slice(0, 15)
-        .map(p => ({
-          url: p['URL'],
-          clics: Number(p['Clics']) || 0,
-          impresiones: Number(p['Impresiones']) || 0,
-          ctr: p['CTR (%)'],
-          posicion: Number(p['Posición Promedio']) || 0,
-          seccion: p['Sección']
-        }));
-
       return {
         disponible: true,
         totales: { totalClics, totalImpresiones: totalImpr, ctrPromedio, posicionPromedio, totalKeywords: keywords.length },
         quickWins,
         topKeywords,
-        subidas,
-        caidas,
-        topPaginas,
-        tendenciaDiaria: tendencia.slice(-40).map(t => ({
-          fecha: t['Fecha'],
-          clics: Number(t['Clics']) || 0,
-          impresiones: Number(t['Impresiones']) || 0,
-          ctr: t['CTR (%)'],
-          posicion: Number(t['Posición Promedio']) || 0
+        topPaginas: [...paginas].sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0)).slice(0, 15)
+      };
+    })(),
+
+    // 📢 CONTEXTO GOOGLE ADS
+    googleAds: (() => {
+      const adsData = liveData?.googleAds;
+      if (!adsData?.disponible) return { disponible: false };
+
+      const camp = adsData.campañas || [];
+      const kw = adsData.keywords || [];
+      const st = adsData.searchTerms || [];
+      const neg = adsData.negativeKeywords || [];
+      const lp = adsData.landingPages || [];
+      const assets = adsData.assets || [];
+      const aud = adsData.audiencias || [];
+      const geo = adsData.geografia || [];
+
+      const totalCosto = camp.reduce((s, c) => s + (Number(c['Costo']) || 0), 0);
+      const totalImpr = camp.reduce((s, c) => s + (Number(c['Impresiones']) || 0), 0);
+      const totalClicks = camp.reduce((s, c) => s + (Number(c['Clicks']) || 0), 0);
+      const totalConv = camp.reduce((s, c) => s + (Number(c['Conversiones']) || 0), 0);
+      const cpl = totalConv > 0 ? totalCosto / totalConv : 0;
+      const ctr = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0;
+      const cpc = totalClicks > 0 ? totalCosto / totalClicks : 0;
+      const tasaConv = totalClicks > 0 ? (totalConv / totalClicks) * 100 : 0;
+
+      return {
+        disponible: true,
+        totales: {
+          inversion: totalCosto,
+          impresiones: totalImpr,
+          clicks: totalClicks,
+          ctr: ctr.toFixed(2),
+          cpc: cpc.toFixed(0),
+          conversiones: totalConv,
+          cpl: cpl.toFixed(0),
+          tasaConversion: tasaConv.toFixed(2)
+        },
+        campañas: camp.map(c => ({
+          nombre: c['Campaña'],
+          canal: c['Canal'],
+          estado: c['Estado'],
+          impresiones: Number(c['Impresiones']) || 0,
+          clicks: Number(c['Clicks']) || 0,
+          costo: Number(c['Costo']) || 0,
+          ctr: c['CTR'],
+          cpc: Number(c['CPC']) || 0,
+          conversiones: Number(c['Conversiones']) || 0,
+          costoConv: Number(c['Costo/Conv.']) || 0,
+          isBusqueda: c['IS Búsqueda'],
+          isPerdidoPresup: c['IS Perdido Presup.']
+        })),
+        topKeywords: [...kw].sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0)).slice(0, 20).map(k => ({
+          keyword: k['Keyword'],
+          matchType: k['Match Type'],
+          qs: Number(k['QS']) || null,
+          impresiones: Number(k['Impresiones']) || 0,
+          clicks: Number(k['Clicks']) || 0,
+          costo: Number(k['Costo']) || 0,
+          conversiones: Number(k['Conversiones']) || 0,
+          costoConv: Number(k['Costo/Conv.']) || 0
+        })),
+        searchTerms: [...st].sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0)).slice(0, 30).map(s => ({
+          term: s['Search Term'],
+          status: s['Status'],
+          keywordOrigen: s['Keyword Origen'],
+          impresiones: Number(s['Impresiones']) || 0,
+          clicks: Number(s['Clicks']) || 0,
+          costo: Number(s['Costo']) || 0,
+          conversiones: Number(s['Conversiones']) || 0
+        })),
+        negativeKeywords: {
+          total: neg.length,
+          porCampaña: neg.reduce((acc, n) => {
+            const c = n['Campaña'];
+            if (!acc[c]) acc[c] = 0;
+            acc[c]++;
+            return acc;
+          }, {}),
+          listado: neg.slice(0, 20).map(n => ({
+            keyword: n['Keyword Negativa'],
+            campaña: n['Campaña'],
+            matchType: n['Match Type']
+          }))
+        },
+        landingPages: lp.map(l => ({
+          url: l['Landing Page'],
+          impresiones: Number(l['Impresiones']) || 0,
+          clicks: Number(l['Clicks']) || 0,
+          costo: Number(l['Costo']) || 0,
+          conversiones: Number(l['Conversiones']) || 0
+        })),
+        topAssets: [...assets].sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0)).slice(0, 15).map(a => ({
+          texto: a['Texto'] || a['Asset Name'],
+          tipo: a['Tipo Asset'],
+          fieldType: a['Field Type'],
+          impresiones: Number(a['Impresiones']) || 0,
+          clicks: Number(a['Clicks']) || 0,
+          ctr: a['CTR'],
+          conversiones: Number(a['Conversiones']) || 0
+        })),
+        audiencias: aud.map(a => ({
+          tipo: a['Tipo'],
+          impresiones: Number(a['Impresiones']) || 0,
+          clicks: Number(a['Clicks']) || 0,
+          costo: Number(a['Costo']) || 0
+        })),
+        geografia: geo.map(g => ({
+          locationType: g['Location Type'],
+          campaña: g['Campaña'],
+          impresiones: Number(g['Impresiones']) || 0,
+          clicks: Number(g['Clicks']) || 0,
+          costo: Number(g['Costo']) || 0,
+          conversiones: Number(g['Conversiones']) || 0
         }))
       };
     })()
@@ -410,48 +484,23 @@ function SEOSection({ liveData, currentClient }) {
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#5b4bff20' }}>
-              <span className="text-base">🔍</span>
-            </div>
-            <span className="text-xs font-medium text-slate-500">Clics SEO</span>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#5b4bff20' }}><span className="text-base">🔍</span></div><span className="text-xs font-medium text-slate-500">Clics SEO</span></div>
           <div className="text-2xl font-bold text-slate-800">{fmt(seoComputed.totalClics)}</div>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#8b5cf620' }}>
-              <span className="text-base">👁️</span>
-            </div>
-            <span className="text-xs font-medium text-slate-500">Impresiones</span>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#8b5cf620' }}><span className="text-base">👁️</span></div><span className="text-xs font-medium text-slate-500">Impresiones</span></div>
           <div className="text-2xl font-bold text-slate-800">{fmt(seoComputed.totalImpresiones)}</div>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#10b98120' }}>
-              <span className="text-base">📊</span>
-            </div>
-            <span className="text-xs font-medium text-slate-500">CTR Promedio</span>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#10b98120' }}><span className="text-base">📊</span></div><span className="text-xs font-medium text-slate-500">CTR Promedio</span></div>
           <div className="text-2xl font-bold text-slate-800">{seoComputed.ctrPromedio.toFixed(2)}%</div>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#f59e0b20' }}>
-              <span className="text-base">🎯</span>
-            </div>
-            <span className="text-xs font-medium text-slate-500">Posición Prom.</span>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#f59e0b20' }}><span className="text-base">🎯</span></div><span className="text-xs font-medium text-slate-500">Posición Prom.</span></div>
           <div className="text-2xl font-bold text-slate-800">{seoComputed.posicionPromedio.toFixed(1)}</div>
         </div>
         <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-4 shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20">
-              <span className="text-base">⚡</span>
-            </div>
-            <span className="text-xs font-medium text-white/90">Quick Wins</span>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20"><span className="text-base">⚡</span></div><span className="text-xs font-medium text-white/90">Quick Wins</span></div>
           <div className="text-2xl font-bold text-white">{seoComputed.quickWins.length}</div>
           <div className="text-[10px] text-white/80 mt-0.5">Oportunidades a atacar</div>
         </div>
@@ -460,25 +509,14 @@ function SEOSection({ liveData, currentClient }) {
       {seoComputed.trendData.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-semibold text-slate-800">Tendencia Diaria SEO</h3>
-              <p className="text-xs text-slate-500">Clics e impresiones por día (últimos 40 días)</p>
-            </div>
-            <div className="text-xs px-3 py-1 rounded-full bg-violet-50 text-violet-700 font-medium">
-              {seoComputed.totalKeywords} keywords
-            </div>
+            <div><h3 className="text-base font-semibold text-slate-800">Tendencia Diaria SEO</h3><p className="text-xs text-slate-500">Clics e impresiones por día (últimos 40 días)</p></div>
+            <div className="text-xs px-3 py-1 rounded-full bg-violet-50 text-violet-700 font-medium">{seoComputed.totalKeywords} keywords</div>
           </div>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={seoComputed.trendData}>
               <defs>
-                <linearGradient id="seoClicsGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#5b4bff" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="#5b4bff" stopOpacity={0.05} />
-                </linearGradient>
-                <linearGradient id="seoImprGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.02} />
-                </linearGradient>
+                <linearGradient id="seoClicsGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5b4bff" stopOpacity={0.4} /><stop offset="100%" stopColor="#5b4bff" stopOpacity={0.05} /></linearGradient>
+                <linearGradient id="seoImprGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} /><stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.02} /></linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
               <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
@@ -495,25 +533,10 @@ function SEOSection({ liveData, currentClient }) {
 
       {seoComputed.quickWins.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                <span>⚡</span> Quick Wins — Oportunidades Top
-              </h3>
-              <p className="text-xs text-slate-500">Keywords en posición 5–15 con muchas impresiones. Atacarlas = subida fuerte de tráfico.</p>
-            </div>
-          </div>
+          <div className="flex items-center justify-between mb-4"><div><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>⚡</span> Quick Wins — Oportunidades Top</h3><p className="text-xs text-slate-500">Keywords en posición 5–15 con muchas impresiones. Atacarlas = subida fuerte de tráfico.</p></div></div>
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10">
-                <tr className="text-left text-slate-500 border-b border-violet-100">
-                  <th className="py-2 px-3 font-semibold">Keyword</th>
-                  <th className="py-2 px-3 text-right font-semibold">Clics</th>
-                  <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
-                  <th className="py-2 px-3 text-right font-semibold">CTR</th>
-                  <th className="py-2 px-3 text-right font-semibold">Posición</th>
-                </tr>
-              </thead>
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">Keyword</th><th className="py-2 px-3 text-right font-semibold">Clics</th><th className="py-2 px-3 text-right font-semibold">Impresiones</th><th className="py-2 px-3 text-right font-semibold">CTR</th><th className="py-2 px-3 text-right font-semibold">Posición</th></tr></thead>
               <tbody>
                 {seoComputed.quickWins.map((k, i) => (
                   <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
@@ -521,11 +544,7 @@ function SEOSection({ liveData, currentClient }) {
                     <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Clics'])}</td>
                     <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Impresiones'])}</td>
                     <td className="py-2 px-3 text-right text-slate-600">{k['CTR (%)']}</td>
-                    <td className="py-2 px-3 text-right">
-                      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: '#f59e0b20', color: '#b45309' }}>
-                        {Number(k['Posición Promedio']).toFixed(1)}
-                      </span>
-                    </td>
+                    <td className="py-2 px-3 text-right"><span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: '#f59e0b20', color: '#b45309' }}>{Number(k['Posición Promedio']).toFixed(1)}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -536,21 +555,10 @@ function SEOSection({ liveData, currentClient }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-              <span>🏆</span> Top 25 Keywords
-            </h3>
-            <p className="text-xs text-slate-500">Ordenadas por clics</p>
-          </div>
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>🏆</span> Top 25 Keywords</h3><p className="text-xs text-slate-500">Ordenadas por clics</p></div>
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10">
-                <tr className="text-left text-slate-500 border-b border-violet-100">
-                  <th className="py-2 px-3 font-semibold">Keyword</th>
-                  <th className="py-2 px-3 text-right font-semibold">Clics</th>
-                  <th className="py-2 px-3 text-right font-semibold">Pos.</th>
-                </tr>
-              </thead>
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">Keyword</th><th className="py-2 px-3 text-right font-semibold">Clics</th><th className="py-2 px-3 text-right font-semibold">Pos.</th></tr></thead>
               <tbody>
                 {seoComputed.topKeywords.map((k, i) => (
                   <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
@@ -565,26 +573,16 @@ function SEOSection({ liveData, currentClient }) {
         </div>
 
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-              <span>📈</span> Movimientos de Posición
-            </h3>
-            <p className="text-xs text-slate-500">Subidas y caídas más relevantes</p>
-          </div>
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>📈</span> Movimientos de Posición</h3><p className="text-xs text-slate-500">Subidas y caídas más relevantes</p></div>
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {seoComputed.subidas.length > 0 && (
               <div>
-                <div className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1">
-                  🚀 SUBIDAS ({seoComputed.subidas.length})
-                </div>
+                <div className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1">🚀 SUBIDAS ({seoComputed.subidas.length})</div>
                 <div className="space-y-1.5">
                   {seoComputed.subidas.slice(0, 8).map((m, i) => (
                     <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-emerald-50/60 border border-emerald-100 text-sm">
                       <span className="text-slate-700 truncate max-w-[180px]" title={m['Keyword']}>{m['Keyword']}</span>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500">{Number(m['Pos. Anterior (7d)']).toFixed(0)} → {Number(m['Pos. Actual (7d)']).toFixed(0)}</span>
-                        <span className="font-semibold text-emerald-700 px-2 py-0.5 rounded-full bg-emerald-100">+{Number(m['Cambio']).toFixed(0)}</span>
-                      </div>
+                      <div className="flex items-center gap-2 text-xs"><span className="text-slate-500">{Number(m['Pos. Anterior (7d)']).toFixed(0)} → {Number(m['Pos. Actual (7d)']).toFixed(0)}</span><span className="font-semibold text-emerald-700 px-2 py-0.5 rounded-full bg-emerald-100">+{Number(m['Cambio']).toFixed(0)}</span></div>
                     </div>
                   ))}
                 </div>
@@ -592,17 +590,12 @@ function SEOSection({ liveData, currentClient }) {
             )}
             {seoComputed.caidas.length > 0 && (
               <div>
-                <div className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">
-                  📉 CAÍDAS ({seoComputed.caidas.length})
-                </div>
+                <div className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">📉 CAÍDAS ({seoComputed.caidas.length})</div>
                 <div className="space-y-1.5">
                   {seoComputed.caidas.slice(0, 8).map((m, i) => (
                     <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-red-50/60 border border-red-100 text-sm">
                       <span className="text-slate-700 truncate max-w-[180px]" title={m['Keyword']}>{m['Keyword']}</span>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500">{Number(m['Pos. Anterior (7d)']).toFixed(0)} → {Number(m['Pos. Actual (7d)']).toFixed(0)}</span>
-                        <span className="font-semibold text-red-700 px-2 py-0.5 rounded-full bg-red-100">{Number(m['Cambio']).toFixed(0)}</span>
-                      </div>
+                      <div className="flex items-center gap-2 text-xs"><span className="text-slate-500">{Number(m['Pos. Anterior (7d)']).toFixed(0)} → {Number(m['Pos. Actual (7d)']).toFixed(0)}</span><span className="font-semibold text-red-700 px-2 py-0.5 rounded-full bg-red-100">{Number(m['Cambio']).toFixed(0)}</span></div>
                     </div>
                   ))}
                 </div>
@@ -614,23 +607,10 @@ function SEOSection({ liveData, currentClient }) {
 
       {seoComputed.topPaginas.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-              <span>🌐</span> Top URLs por Tráfico SEO
-            </h3>
-            <p className="text-xs text-slate-500">Páginas con más tráfico orgánico</p>
-          </div>
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>🌐</span> Top URLs por Tráfico SEO</h3><p className="text-xs text-slate-500">Páginas con más tráfico orgánico</p></div>
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10">
-                <tr className="text-left text-slate-500 border-b border-violet-100">
-                  <th className="py-2 px-3 font-semibold">URL</th>
-                  <th className="py-2 px-3 text-right font-semibold">Clics</th>
-                  <th className="py-2 px-3 text-right font-semibold">Impr.</th>
-                  <th className="py-2 px-3 text-right font-semibold">CTR</th>
-                  <th className="py-2 px-3 text-right font-semibold">Pos.</th>
-                </tr>
-              </thead>
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">URL</th><th className="py-2 px-3 text-right font-semibold">Clics</th><th className="py-2 px-3 text-right font-semibold">Impr.</th><th className="py-2 px-3 text-right font-semibold">CTR</th><th className="py-2 px-3 text-right font-semibold">Pos.</th></tr></thead>
               <tbody>
                 {seoComputed.topPaginas.map((p, i) => {
                   const urlDisplay = String(p['URL'] || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
@@ -654,6 +634,570 @@ function SEOSection({ liveData, currentClient }) {
 }
 
 // =============================================
+// 📢 PAID MEDIA — Google Ads / Meta / LinkedIn
+// =============================================
+function PaidMediaSection({ liveData, currentClient }) {
+  const [activePlatform, setActivePlatform] = useState('googleAds');
+
+  const tieneGoogleAds = liveData?.googleAds?.disponible;
+  // Future: tieneMetaAds, tieneLinkedInAds
+
+  const platforms = [
+    { id: 'googleAds', label: 'Google Ads', icon: '🟡', available: tieneGoogleAds },
+    { id: 'metaAds', label: 'Meta Ads', icon: '🔜', available: false, badge: 'Pronto' },
+    { id: 'linkedinAds', label: 'LinkedIn Ads', icon: '🔜', available: false, badge: 'Pronto' },
+  ];
+
+  if (!tieneGoogleAds) {
+    return (
+      <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-8 text-center">
+        <div className="text-5xl mb-3">📢</div>
+        <h3 className="text-lg font-bold text-slate-800 mb-2">Paid Media no disponible para este cliente</h3>
+        <p className="text-sm text-slate-600">
+          Aún no se ha configurado data de campañas pagadas para <strong>{currentClient?.nombre}</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Tabs de plataformas */}
+      <div className="bg-white rounded-2xl p-2 border border-violet-100 shadow-sm flex gap-1">
+        {platforms.map(p => (
+          <button
+            key={p.id}
+            onClick={() => p.available && setActivePlatform(p.id)}
+            disabled={!p.available}
+            className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 ${
+              activePlatform === p.id
+                ? 'text-white shadow-md'
+                : p.available
+                  ? 'text-slate-700 hover:bg-violet-50'
+                  : 'text-slate-400 cursor-not-allowed'
+            }`}
+            style={activePlatform === p.id ? { background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` } : {}}
+          >
+            <span>{p.icon}</span>
+            <span>{p.label}</span>
+            {p.badge && (
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${activePlatform === p.id ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-700'}`}>
+                {p.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Contenido según plataforma */}
+      {activePlatform === 'googleAds' && tieneGoogleAds && (
+        <GoogleAdsTab adsData={liveData.googleAds} currentClient={currentClient} />
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// 🟡 GOOGLE ADS TAB
+// =============================================
+function GoogleAdsTab({ adsData, currentClient }) {
+  const computed = useMemo(() => {
+    const camp = adsData.campañas || [];
+    const campDiario = adsData.campañasDiario || [];
+    const kw = adsData.keywords || [];
+    const st = adsData.searchTerms || [];
+    const neg = adsData.negativeKeywords || [];
+    const lp = adsData.landingPages || [];
+    const assets = adsData.assets || [];
+    const aud = adsData.audiencias || [];
+    const geo = adsData.geografia || [];
+
+    // KPIs totales
+    const totalCosto = camp.reduce((s, c) => s + (Number(c['Costo']) || 0), 0);
+    const totalImpr = camp.reduce((s, c) => s + (Number(c['Impresiones']) || 0), 0);
+    const totalClicks = camp.reduce((s, c) => s + (Number(c['Clicks']) || 0), 0);
+    const totalConv = camp.reduce((s, c) => s + (Number(c['Conversiones']) || 0), 0);
+    const totalValor = camp.reduce((s, c) => s + (Number(c['Valor Conv.']) || 0), 0);
+
+    const ctr = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0;
+    const cpc = totalClicks > 0 ? totalCosto / totalClicks : 0;
+    const cpl = totalConv > 0 ? totalCosto / totalConv : 0;
+    const tasaConv = totalClicks > 0 ? (totalConv / totalClicks) * 100 : 0;
+
+    // Tendencia diaria agregada
+    const trendMap = {};
+    campDiario.forEach(d => {
+      const fecha = String(d['Fecha'] || '').slice(0, 10);
+      if (!fecha) return;
+      if (!trendMap[fecha]) trendMap[fecha] = { fechaCompleta: fecha, fecha: fecha.slice(5), costo: 0, clicks: 0, impresiones: 0, conversiones: 0 };
+      trendMap[fecha].costo += Number(d['Costo']) || 0;
+      trendMap[fecha].clicks += Number(d['Clicks']) || 0;
+      trendMap[fecha].impresiones += Number(d['Impresiones']) || 0;
+      trendMap[fecha].conversiones += Number(d['Conversiones']) || 0;
+    });
+    const trendData = Object.values(trendMap).sort((a, b) => a.fechaCompleta.localeCompare(b.fechaCompleta));
+
+    // Distribución por canal
+    const distribCanal = {};
+    camp.forEach(c => {
+      const canal = c['Canal'] || 'Otro';
+      if (!distribCanal[canal]) distribCanal[canal] = { canal, costo: 0, conversiones: 0, clicks: 0 };
+      distribCanal[canal].costo += Number(c['Costo']) || 0;
+      distribCanal[canal].conversiones += Number(c['Conversiones']) || 0;
+      distribCanal[canal].clicks += Number(c['Clicks']) || 0;
+    });
+    const canalesArr = Object.values(distribCanal);
+
+    // Top keywords (por costo)
+    const topKeywords = [...kw]
+      .filter(k => Number(k['Costo']) > 0 || Number(k['Impresiones']) > 0)
+      .sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0))
+      .slice(0, 30);
+
+    // Top search terms
+    const topSearchTerms = [...st]
+      .sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0))
+      .slice(0, 30);
+
+    // Top assets
+    const topAssets = [...assets]
+      .filter(a => Number(a['Impresiones']) > 0)
+      .sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0))
+      .slice(0, 25);
+
+    // Negative keywords agrupadas
+    const negPorCampaña = {};
+    neg.forEach(n => {
+      const c = n['Campaña'] || 'Sin campaña';
+      if (!negPorCampaña[c]) negPorCampaña[c] = 0;
+      negPorCampaña[c]++;
+    });
+
+    return {
+      totales: { totalCosto, totalImpr, totalClicks, totalConv, totalValor, ctr, cpc, cpl, tasaConv },
+      campañas: camp,
+      trendData,
+      canalesArr,
+      topKeywords,
+      topSearchTerms,
+      topAssets,
+      negativas: neg,
+      negPorCampaña,
+      landingPages: lp,
+      audiencias: aud,
+      geografia: geo
+    };
+  }, [adsData]);
+
+  const fmt = (n) => Number(n).toLocaleString('es-CL');
+  const fmtMoney = (n) => `$${fmt(Math.round(Number(n) || 0))}`;
+  const fmtMoneyShort = (n) => {
+    const num = Number(n) || 0;
+    if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
+    if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`;
+    return `$${fmt(Math.round(num))}`;
+  };
+
+  const tooltipStyle = {
+    contentStyle: { background: 'white', border: '1px solid #ddd6fe', borderRadius: '8px', fontSize: 12 },
+    labelStyle: { color: '#5b4bff', fontWeight: 600 }
+  };
+
+  const PIE_COLORS = [GORUTY.primary, GORUTY.tertiary, GORUTY.accent, GORUTY.secondary, GORUTY.deepPurple, GORUTY.pink];
+
+  // Estilo según QS
+  const qsColor = (qs) => {
+    const n = Number(qs);
+    if (!n || isNaN(n)) return { bg: '#f1f5f9', text: '#64748b', label: 'N/A' };
+    if (n >= 7) return { bg: '#d1fae5', text: '#065f46', label: 'Bueno' };
+    if (n >= 4) return { bg: '#fef3c7', text: '#92400e', label: 'Medio' };
+    return { bg: '#fee2e2', text: '#991b1b', label: 'Bajo' };
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs principales */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-4 shadow-md">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20"><DollarSign className="w-4 h-4 text-white" /></div>
+            <span className="text-xs font-medium text-white/90">Inversión Total</span>
+          </div>
+          <div className="text-2xl font-bold text-white">{fmtMoneyShort(computed.totales.totalCosto)}</div>
+          <div className="text-[10px] text-white/80 mt-0.5">{computed.campañas.length} campañas</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#5b4bff20' }}><Eye className="w-4 h-4" style={{ color: GORUTY.primary }} /></div><span className="text-xs font-medium text-slate-500">Impresiones</span></div>
+          <div className="text-2xl font-bold text-slate-800">{fmt(computed.totales.totalImpr)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#7c6dff20' }}><MousePointer className="w-4 h-4" style={{ color: GORUTY.secondary }} /></div><span className="text-xs font-medium text-slate-500">Clicks</span></div>
+          <div className="text-2xl font-bold text-slate-800">{fmt(computed.totales.totalClicks)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#10b98120' }}><Activity className="w-4 h-4" style={{ color: '#10b981' }} /></div><span className="text-xs font-medium text-slate-500">CTR</span></div>
+          <div className="text-2xl font-bold text-slate-800">{computed.totales.ctr.toFixed(2)}%</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#a594ff20' }}><DollarSign className="w-4 h-4" style={{ color: GORUTY.tertiary }} /></div><span className="text-xs font-medium text-slate-500">CPC Promedio</span></div>
+          <div className="text-2xl font-bold text-slate-800">{fmtMoney(computed.totales.cpc)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#3a2bd420' }}><Target className="w-4 h-4" style={{ color: GORUTY.deepPurple }} /></div><span className="text-xs font-medium text-slate-500">Conversiones</span></div>
+          <div className="text-2xl font-bold text-slate-800">{computed.totales.totalConv.toFixed(0)}</div>
+        </div>
+        <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-4 shadow-md">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20"><Award className="w-4 h-4 text-white" /></div><span className="text-xs font-medium text-white/90">CPL</span></div>
+          <div className="text-2xl font-bold text-white">{fmtMoneyShort(computed.totales.cpl)}</div>
+          <div className="text-[10px] text-white/80 mt-0.5">Costo por Lead</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#ef444420' }}><TrendingUp className="w-4 h-4" style={{ color: GORUTY.danger }} /></div><span className="text-xs font-medium text-slate-500">Tasa Conversión</span></div>
+          <div className="text-2xl font-bold text-slate-800">{computed.totales.tasaConv.toFixed(2)}%</div>
+        </div>
+      </div>
+
+      {/* Tendencia diaria */}
+      {computed.trendData.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800">📈 Tendencia Diaria — Costo, Clicks y Conversiones</h3><p className="text-xs text-slate-500">Evolución del rendimiento día a día</p></div>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={computed.trendData}>
+              <defs>
+                <linearGradient id="adsCostoGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4} /><stop offset="100%" stopColor="#f59e0b" stopOpacity={0.05} /></linearGradient>
+                <linearGradient id="adsClicksGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5b4bff" stopOpacity={0.3} /><stop offset="100%" stopColor="#5b4bff" stopOpacity={0.02} /></linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+              <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
+              <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 11 }} />
+              <YAxis yAxisId="right" orientation="right" stroke={GORUTY.deepPurple} style={{ fontSize: 11 }} />
+              <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'Costo' ? fmtMoney(value) : fmt(value)} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              <Area yAxisId="left" type="monotone" dataKey="costo" name="Costo" stroke="#f59e0b" fill="url(#adsCostoGrad)" strokeWidth={2.5} />
+              <Area yAxisId="left" type="monotone" dataKey="clicks" name="Clicks" stroke="#5b4bff" fill="url(#adsClicksGrad)" strokeWidth={2} />
+              <Bar yAxisId="right" dataKey="conversiones" name="Conversiones" fill={GORUTY.deepPurple} radius={[4, 4, 0, 0]} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Performance por Campaña + Pie distribución */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Megaphone className="w-4 h-4" style={{ color: GORUTY.primary }} /> Performance por Campaña</h3><p className="text-xs text-slate-500">Detalle de inversión, conversiones y eficiencia</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Campaña</th>
+                <th className="py-2 px-3 text-center font-semibold">Canal</th>
+                <th className="py-2 px-3 text-right font-semibold">Inversión</th>
+                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+                <th className="py-2 px-3 text-right font-semibold">CPL</th>
+              </tr></thead>
+              <tbody>
+                {computed.campañas.map((c, i) => {
+                  const costo = Number(c['Costo']) || 0;
+                  const conv = Number(c['Conversiones']) || 0;
+                  const cpl = conv > 0 ? costo / conv : 0;
+                  return (
+                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                      <td className="py-2 px-3 text-slate-700 font-medium">{c['Campaña']}</td>
+                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: c['Canal'] === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: c['Canal'] === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{c['Canal']}</span></td>
+                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(costo)}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(c['Clicks'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{c['CTR']}</td>
+                      <td className="py-2 px-3 text-right font-semibold text-slate-700">{Number(c['Conversiones']).toFixed(0)}</td>
+                      <td className="py-2 px-3 text-right font-bold" style={{ color: GORUTY.primary }}>{conv > 0 ? fmtMoneyShort(cpl) : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800">🥧 Distribución Inversión</h3><p className="text-xs text-slate-500">Por canal</p></div>
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={computed.canalesArr} dataKey="costo" nameKey="canal" cx="50%" cy="50%" outerRadius={75} label={(e) => `${e.canal}\n${fmtMoneyShort(e.costo)}`} style={{ fontSize: 10 }}>
+                {computed.canalesArr.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+              </Pie>
+              <Tooltip {...tooltipStyle} formatter={(value) => fmtMoney(value)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Keywords con Quality Score */}
+      {computed.topKeywords.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Search className="w-4 h-4" style={{ color: GORUTY.primary }} /> Top Keywords</h3><p className="text-xs text-slate-500">Performance + Quality Score (verde ≥7, amarillo 4-6, rojo &lt;4)</p></div>
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Keyword</th>
+                <th className="py-2 px-3 text-center font-semibold">Match</th>
+                <th className="py-2 px-3 text-center font-semibold">QS</th>
+                <th className="py-2 px-3 text-right font-semibold">Impr.</th>
+                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                <th className="py-2 px-3 text-right font-semibold">Costo</th>
+                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+                <th className="py-2 px-3 text-right font-semibold">CPL</th>
+              </tr></thead>
+              <tbody>
+                {computed.topKeywords.map((k, i) => {
+                  const qs = qsColor(k['QS']);
+                  const conv = Number(k['Conversiones']) || 0;
+                  const costo = Number(k['Costo']) || 0;
+                  const cpl = conv > 0 ? costo / conv : 0;
+                  return (
+                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                      <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[200px]" title={k['Keyword']}>{k['Keyword']}</td>
+                      <td className="py-2 px-3 text-center text-[10px] text-slate-500 font-mono">{k['Match Type']}</td>
+                      <td className="py-2 px-3 text-center"><span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: qs.bg, color: qs.text }}>{Number(k['QS']) || '—'}</span></td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Impresiones'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Clicks'])}</td>
+                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(costo)}</td>
+                      <td className="py-2 px-3 text-right text-slate-700 font-semibold">{conv.toFixed(0)}</td>
+                      <td className="py-2 px-3 text-right font-bold" style={{ color: conv > 0 ? GORUTY.primary : '#94a3b8' }}>{conv > 0 ? fmtMoneyShort(cpl) : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Search Terms */}
+      {computed.topSearchTerms.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">🔎 Search Terms — ¿Qué buscan los usuarios?</h3><p className="text-xs text-slate-500">Términos reales que activaron tus anuncios</p></div>
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Search Term</th>
+                <th className="py-2 px-3 text-center font-semibold">Estado</th>
+                <th className="py-2 px-3 font-semibold">Keyword Origen</th>
+                <th className="py-2 px-3 text-right font-semibold">Impr.</th>
+                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                <th className="py-2 px-3 text-right font-semibold">Costo</th>
+                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+              </tr></thead>
+              <tbody>
+                {computed.topSearchTerms.map((s, i) => {
+                  const conv = Number(s['Conversiones']) || 0;
+                  const costo = Number(s['Costo']) || 0;
+                  return (
+                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                      <td className="py-2 px-3 text-slate-700 truncate max-w-[220px]" title={s['Search Term']}>{s['Search Term']}</td>
+                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: s['Status'] === 'ADDED' ? '#d1fae5' : s['Status'] === 'EXCLUDED' ? '#fee2e2' : '#f1f5f9', color: s['Status'] === 'ADDED' ? '#065f46' : s['Status'] === 'EXCLUDED' ? '#991b1b' : '#64748b' }}>{s['Status']}</span></td>
+                      <td className="py-2 px-3 text-slate-500 text-[11px] font-mono truncate max-w-[150px]" title={s['Keyword Origen']}>{s['Keyword Origen']}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(s['Impresiones'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(s['Clicks'])}</td>
+                      <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(costo)}</td>
+                      <td className="py-2 px-3 text-right font-semibold" style={{ color: conv > 0 ? '#10b981' : '#94a3b8' }}>{conv.toFixed(0)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Negative Keywords */}
+      {computed.negativas.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Ban className="w-4 h-4 text-rose-500" /> Negative Keywords Activas</h3><p className="text-xs text-slate-500">Palabras excluidas de tus campañas</p></div>
+            <div className="text-right">
+              <div className="text-3xl font-bold" style={{ color: GORUTY.danger }}>{computed.negativas.length}</div>
+              <div className="text-[10px] text-slate-500">activas en total</div>
+            </div>
+          </div>
+
+          {/* Distribución por campaña */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            {Object.entries(computed.negPorCampaña).map(([campaña, count], i) => (
+              <div key={i} className="bg-rose-50/40 border border-rose-100 rounded-lg p-3 flex items-center justify-between">
+                <span className="text-sm font-medium text-slate-700">{campaña}</span>
+                <span className="text-base font-bold" style={{ color: GORUTY.danger }}>{count}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabla detalle */}
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Keyword Negativa</th>
+                <th className="py-2 px-3 font-semibold">Campaña</th>
+                <th className="py-2 px-3 text-center font-semibold">Match Type</th>
+                <th className="py-2 px-3 text-center font-semibold">Estado</th>
+              </tr></thead>
+              <tbody>
+                {computed.negativas.map((n, i) => (
+                  <tr key={i} className="border-b border-violet-50 hover:bg-rose-50/30">
+                    <td className="py-2 px-3 text-slate-700 font-medium">{n['Keyword Negativa']}</td>
+                    <td className="py-2 px-3 text-slate-500 text-xs">{n['Campaña']}</td>
+                    <td className="py-2 px-3 text-center"><span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{n['Match Type']}</span></td>
+                    <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{n['Estado']}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Landing Pages */}
+      {computed.landingPages.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Globe className="w-4 h-4" style={{ color: GORUTY.primary }} /> Landing Pages</h3><p className="text-xs text-slate-500">URLs de destino y su performance</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">URL</th>
+                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
+                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                <th className="py-2 px-3 text-right font-semibold">Costo</th>
+                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+              </tr></thead>
+              <tbody>
+                {computed.landingPages.map((l, i) => {
+                  const urlCorto = String(l['Landing Page'] || '').replace(/^https?:\/\/[^/]+/, '').split('?')[0] || '/';
+                  return (
+                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                      <td className="py-2 px-3 font-mono text-xs text-slate-700 truncate max-w-[300px]" title={l['Landing Page']}>{urlCorto}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(l['Impresiones'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(l['Clicks'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{l['CTR']}</td>
+                      <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(l['Costo'])}</td>
+                      <td className="py-2 px-3 text-right font-semibold text-slate-700">{Number(l['Conversiones']).toFixed(0)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Assets */}
+      {computed.topAssets.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><ImageIcon className="w-4 h-4" style={{ color: GORUTY.primary }} /> Assets — Performance Creatividades</h3><p className="text-xs text-slate-500">Headlines, descriptions, imágenes y videos con mejor rendimiento</p></div>
+          <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Asset</th>
+                <th className="py-2 px-3 text-center font-semibold">Tipo</th>
+                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
+                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+              </tr></thead>
+              <tbody>
+                {computed.topAssets.map((a, i) => {
+                  const texto = a['Texto'] || a['Asset Name'] || '—';
+                  const tipoColor = a['Field Type'] === 'HEADLINE' ? '#5b4bff20' :
+                                    a['Field Type'] === 'DESCRIPTION' ? '#10b98120' :
+                                    a['Field Type'] === 'LONG_HEADLINE' ? '#f59e0b20' :
+                                    a['Field Type'] === 'YOUTUBE_VIDEO' ? '#ef444420' :
+                                    a['Tipo Asset'] === 'IMAGE' ? '#a594ff30' : '#cbd5e120';
+                  const tipoText = a['Field Type'] === 'HEADLINE' ? GORUTY.primary :
+                                   a['Field Type'] === 'DESCRIPTION' ? '#065f46' :
+                                   a['Field Type'] === 'LONG_HEADLINE' ? '#92400e' :
+                                   a['Field Type'] === 'YOUTUBE_VIDEO' ? '#991b1b' :
+                                   a['Tipo Asset'] === 'IMAGE' ? GORUTY.deepPurple : '#64748b';
+                  return (
+                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                      <td className="py-2 px-3 text-slate-700 truncate max-w-[280px]" title={texto}>{texto}</td>
+                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: tipoColor, color: tipoText }}>{a['Field Type'] || a['Tipo Asset']}</span></td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Impresiones'])}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Clicks'])}</td>
+                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.primary }}>{a['CTR']}</td>
+                      <td className="py-2 px-3 text-right text-slate-700 font-semibold">{Number(a['Conversiones']).toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Audiencias (display) */}
+      {computed.audiencias.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Users className="w-4 h-4" style={{ color: GORUTY.primary }} /> Audiencias (Display)</h3><p className="text-xs text-slate-500">Custom Intent, User Lists y User Interests</p></div>
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Tipo</th>
+                <th className="py-2 px-3 font-semibold">Campaña</th>
+                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
+                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                <th className="py-2 px-3 text-right font-semibold">Costo</th>
+              </tr></thead>
+              <tbody>
+                {computed.audiencias.map((a, i) => (
+                  <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                    <td className="py-2 px-3"><span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{a['Tipo']}</span></td>
+                    <td className="py-2 px-3 text-slate-700 text-xs">{a['Campaña']}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Impresiones'])}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Clicks'])}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{a['CTR']}</td>
+                    <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(a['Costo'])}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Geografía */}
+      {computed.geografia.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><MapPin className="w-4 h-4" style={{ color: GORUTY.primary }} /> Geografía</h3><p className="text-xs text-slate-500">Performance por tipo de ubicación</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-3 font-semibold">Campaña</th>
+                <th className="py-2 px-3 font-semibold">Tipo Ubicación</th>
+                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
+                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                <th className="py-2 px-3 text-right font-semibold">Costo</th>
+                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+              </tr></thead>
+              <tbody>
+                {computed.geografia.map((g, i) => (
+                  <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                    <td className="py-2 px-3 text-slate-700 text-xs">{g['Campaña']}</td>
+                    <td className="py-2 px-3"><span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{g['Location Type']}</span></td>
+                    <td className="py-2 px-3 text-right text-slate-600">{fmt(g['Impresiones'])}</td>
+                    <td className="py-2 px-3 text-right text-slate-600">{fmt(g['Clicks'])}</td>
+                    <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(g['Costo'])}</td>
+                    <td className="py-2 px-3 text-right font-semibold text-slate-700">{Number(g['Conversiones']).toFixed(0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
 // 🎯 FUNNEL DE CONVERSIÓN
 // =============================================
 function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange, trendData }) {
@@ -661,7 +1205,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
 
   const funnelData = useMemo(() => {
     if (!liveData?.eventos) return null;
-
     const eventosAgregados = {};
     liveData.eventos.filter(row => dateFilter(row['Fecha'])).forEach(row => {
       const ev = row['Nombre del Evento'] || '';
@@ -676,10 +1219,8 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
 
     const checkoutEvents = ['begin_checkout', 'add_to_cart', 'purchase', 'add_payment_info', 'add_shipping_info'];
     const leadEvents = ['form_submit', 'generate_lead', 'contact', 'phone_click', 'whatsapp_click', 'email_click', 'sign_up', 'click_to_call'];
-
     const tieneCheckout = checkoutEvents.some(ev => (eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo) > 0);
     const tieneLeads = leadEvents.some(ev => (eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo) > 0);
-
     const modo = tieneCheckout ? 'b2c' : (tieneLeads ? 'b2b' : 'b2b');
 
     const sesiones = kpis.sesiones || 0;
@@ -693,7 +1234,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       const beginCheckout = eventosAgregados['begin_checkout']?.usuarios || 0;
       const purchase = eventosAgregados['purchase']?.usuarios || eventosAgregados['purchase']?.conteo || 0;
       purchaseValor = eventosAgregados['purchase']?.valor || 0;
-
       pasos = [
         { nombre: 'Sesiones', descripcion: 'Visitas iniciadas al sitio', valor: sesiones, icon: Users, color: GORUTY.primary, emoji: '👥' },
         { nombre: 'Engagement', descripcion: 'Sesiones >10s o múltiples páginas', valor: sesionesEng, icon: Heart, color: GORUTY.secondary, emoji: '💖' },
@@ -706,12 +1246,8 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       const leadsEventosUsados = [];
       leadEvents.forEach(ev => {
         const cnt = eventosAgregados[ev]?.usuarios || eventosAgregados[ev]?.conteo || 0;
-        if (cnt > 0) {
-          leadsCount += cnt;
-          leadsEventosUsados.push(`${ev} (${cnt})`);
-        }
+        if (cnt > 0) { leadsCount += cnt; leadsEventosUsados.push(`${ev} (${cnt})`); }
       });
-
       pasos = [
         { nombre: 'Sesiones', descripcion: 'Visitas iniciadas al sitio', valor: sesiones, icon: Users, color: GORUTY.primary, emoji: '👥' },
         { nombre: 'Engagement', descripcion: 'Sesiones >10s o múltiples páginas', valor: sesionesEng, icon: Heart, color: GORUTY.secondary, emoji: '💖' },
@@ -729,109 +1265,20 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       return { ...paso, pct, pctAnterior, dropOff, perdidos };
     });
 
-    let comparativa = null;
-    if (trendData && trendData.length > 0 && dateRange !== 'all') {
-      const fechasOrdenadas = trendData.map(d => d.fechaCompleta).filter(Boolean).sort();
-      const primeraFecha = fechasOrdenadas[0];
-      const diasPeriodo = trendData.length;
-
-      const fechaInicio = new Date(primeraFecha);
-      const fechaFinAnterior = new Date(fechaInicio);
-      fechaFinAnterior.setDate(fechaFinAnterior.getDate() - 1);
-      const fechaInicioAnterior = new Date(fechaFinAnterior);
-      fechaInicioAnterior.setDate(fechaInicioAnterior.getDate() - diasPeriodo + 1);
-
-      const fmtDate = (d) => d.toISOString().slice(0, 10);
-      const inicioAntStr = fmtDate(fechaInicioAnterior);
-      const finAntStr = fmtDate(fechaFinAnterior);
-
-      const enPeriodoAnterior = (fechaRaw) => {
-        if (!fechaRaw) return false;
-        const f = String(fechaRaw).slice(0, 10);
-        return f >= inicioAntStr && f <= finAntStr;
-      };
-
-      let sesionesAnt = 0, sesionesEngAnt = 0;
-      (liveData.resumenDiario || []).filter(row => enPeriodoAnterior(row['Fecha'])).forEach(row => {
-        sesionesAnt += Number(row['Sesiones']) || 0;
-        sesionesEngAnt += Number(row['Sesiones Comprometidas']) || 0;
-      });
-
-      const eventosAnteriores = {};
-      liveData.eventos.filter(row => enPeriodoAnterior(row['Fecha'])).forEach(row => {
-        const ev = row['Nombre del Evento'] || '';
-        const usuarios = Number(row['Usuarios']) || 0;
-        const conteo = Number(row['Conversiones']) || 0;
-        if (!eventosAnteriores[ev]) eventosAnteriores[ev] = 0;
-        eventosAnteriores[ev] += usuarios || conteo;
-      });
-
-      const valoresAnt = {
-        Sesiones: sesionesAnt,
-        Engagement: sesionesEngAnt,
-        'Interés Profundo': eventosAnteriores['scroll'] || 0,
-      };
-      if (modo === 'b2c') {
-        valoresAnt['Inicio Checkout'] = eventosAnteriores['begin_checkout'] || 0;
-        valoresAnt['Compra'] = eventosAnteriores['purchase'] || 0;
-      } else {
-        let leadsAnt = 0;
-        leadEvents.forEach(ev => { leadsAnt += eventosAnteriores[ev] || 0; });
-        valoresAnt['Leads / Contacto'] = leadsAnt;
-      }
-
-      pasosCalc.forEach(paso => {
-        const valorAnt = valoresAnt[paso.nombre] || 0;
-        if (valorAnt > 0) {
-          const cambio = ((paso.valor - valorAnt) / valorAnt) * 100;
-          paso.valorAnterior = valorAnt;
-          paso.cambio = cambio;
-        } else {
-          paso.valorAnterior = valorAnt;
-          paso.cambio = paso.valor > 0 ? 100 : 0;
-        }
-      });
-
-      comparativa = {
-        disponible: true,
-        rangoAnterior: `${inicioAntStr} a ${finAntStr}`,
-        diasComparados: diasPeriodo
-      };
-    }
-
-    return { pasos: pasosCalc, total, purchaseValor, modo, comparativa };
+    return { pasos: pasosCalc, total, purchaseValor, modo, comparativa: null };
   }, [liveData, kpis, dateFilter, dateRange, trendData]);
 
   const fmt = (n) => Number(n).toLocaleString('es-CL');
   const fmtMoney = (n) => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : `$${(n / 1000).toFixed(0)}K`;
 
   if (!funnelData || funnelData.total === 0) {
-    return (
-      <div className="bg-white border border-violet-100 rounded-xl p-8 text-center shadow-sm">
-        <AlertCircle className="w-8 h-8 mx-auto mb-2" style={{ color: GORUTY.warning }} />
-        <p className="text-sm text-slate-500">No hay datos suficientes para mostrar el funnel en este período.</p>
-      </div>
-    );
+    return (<div className="bg-white border border-violet-100 rounded-xl p-8 text-center shadow-sm"><AlertCircle className="w-8 h-8 mx-auto mb-2" style={{ color: GORUTY.warning }} /><p className="text-sm text-slate-500">No hay datos suficientes para mostrar el funnel en este período.</p></div>);
   }
 
-  const { pasos, total, purchaseValor, modo, comparativa } = funnelData;
+  const { pasos, total, purchaseValor, modo } = funnelData;
   const tasaConversion = pasos[pasos.length - 1].pct.toFixed(2);
   const valorPorSesion = total ? (purchaseValor / total) : 0;
   const ultimoPaso = pasos[pasos.length - 1];
-
-  const renderCambio = (cambio) => {
-    if (cambio === undefined || cambio === null) return null;
-    const positivo = cambio > 0;
-    const Icon = positivo ? TrendingUp : TrendingDown;
-    const color = positivo ? '#10b981' : '#ef4444';
-    const bgColor = positivo ? '#10b98115' : '#ef444415';
-    return (
-      <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ color, backgroundColor: bgColor }}>
-        <Icon className="w-2.5 h-2.5" />
-        <span>{positivo ? '+' : ''}{cambio.toFixed(1)}%</span>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -839,241 +1286,66 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
         <div className="flex items-center gap-2">
           <span className="text-base">{modo === 'b2c' ? '🛒' : '📧'}</span>
           <div>
-            <span className="text-xs font-bold" style={{ color: modo === 'b2c' ? GORUTY.primary : '#059669' }}>
-              {modo === 'b2c' ? 'Modo B2C detectado' : 'Modo B2B detectado'}
-            </span>
-            <span className="text-[10px] text-slate-500 ml-2">
-              {modo === 'b2c' ? 'Cliente con e-commerce / checkout' : 'Cliente de captación de leads'}
-            </span>
+            <span className="text-xs font-bold" style={{ color: modo === 'b2c' ? GORUTY.primary : '#059669' }}>{modo === 'b2c' ? 'Modo B2C detectado' : 'Modo B2B detectado'}</span>
+            <span className="text-[10px] text-slate-500 ml-2">{modo === 'b2c' ? 'Cliente con e-commerce / checkout' : 'Cliente de captación de leads'}</span>
           </div>
         </div>
-        {comparativa?.disponible && (
-          <div className="text-[10px] text-slate-500 hidden md:block">
-            📊 Comparando vs período anterior ({comparativa.diasComparados} días)
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white border border-violet-100 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1 font-medium">🎯 Tasa Conversión Global</div>
-          <div className="flex items-center gap-2">
-            <div className="text-2xl font-bold" style={{ color: GORUTY.primary }}>{tasaConversion}%</div>
-            {comparativa?.disponible && ultimoPaso.cambio !== undefined && pasos[0].valorAnterior > 0 && (() => {
-              const tasaAnt = pasos[0].valorAnterior > 0 ? (ultimoPaso.valorAnterior / pasos[0].valorAnterior) * 100 : 0;
-              const cambioTasa = tasaAnt > 0 ? tasaConversion - tasaAnt : 0;
-              return cambioTasa !== 0 ? renderCambio(cambioTasa) : null;
-            })()}
-          </div>
+          <div className="text-2xl font-bold" style={{ color: GORUTY.primary }}>{tasaConversion}%</div>
           <div className="text-[10px] text-slate-400 mt-1">Sesiones → {ultimoPaso.nombre}</div>
         </div>
         <div className="bg-white border border-violet-100 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1 font-medium">{modo === 'b2c' ? '💰 Ingresos Totales' : '📧 Total Leads'}</div>
-          <div className="flex items-center gap-2">
-            <div className="text-2xl font-bold" style={{ color: GORUTY.deepPurple }}>{modo === 'b2c' ? fmtMoney(purchaseValor) : fmt(ultimoPaso.valor)}</div>
-            {comparativa?.disponible && ultimoPaso.cambio !== undefined && renderCambio(ultimoPaso.cambio)}
-          </div>
+          <div className="text-2xl font-bold" style={{ color: GORUTY.deepPurple }}>{modo === 'b2c' ? fmtMoney(purchaseValor) : fmt(ultimoPaso.valor)}</div>
           <div className="text-[10px] text-slate-400 mt-1">{modo === 'b2c' ? `${fmt(ultimoPaso.valor)} compras` : 'En el período'}</div>
         </div>
-        {modo === 'b2c' ? (
-          <div className="bg-white border border-violet-100 rounded-xl p-4">
-            <div className="text-xs text-slate-500 mb-1 font-medium">📊 Valor por Sesión</div>
-            <div className="text-2xl font-bold" style={{ color: GORUTY.accent }}>${fmt(Math.round(valorPorSesion))}</div>
-            <div className="text-[10px] text-slate-400 mt-1">Promedio</div>
-          </div>
-        ) : (
-          <div className="bg-white border border-violet-100 rounded-xl p-4">
-            <div className="text-xs text-slate-500 mb-1 font-medium">🎯 Costo Lead (sesiones)</div>
-            <div className="text-2xl font-bold" style={{ color: GORUTY.accent }}>{ultimoPaso.valor > 0 ? fmt(Math.round(total / ultimoPaso.valor)) : '—'}</div>
-            <div className="text-[10px] text-slate-400 mt-1">Sesiones por lead</div>
-          </div>
-        )}
+        <div className="bg-white border border-violet-100 rounded-xl p-4">
+          <div className="text-xs text-slate-500 mb-1 font-medium">{modo === 'b2c' ? '📊 Valor por Sesión' : '🎯 Costo Lead (sesiones)'}</div>
+          <div className="text-2xl font-bold" style={{ color: GORUTY.accent }}>{modo === 'b2c' ? `$${fmt(Math.round(valorPorSesion))}` : (ultimoPaso.valor > 0 ? fmt(Math.round(total / ultimoPaso.valor)) : '—')}</div>
+          <div className="text-[10px] text-slate-400 mt-1">{modo === 'b2c' ? 'Promedio' : 'Sesiones por lead'}</div>
+        </div>
         <div className="bg-white border border-violet-100 rounded-xl p-4">
           <div className="text-xs text-slate-500 mb-1 font-medium">👥 Sesiones</div>
-          <div className="flex items-center gap-2">
-            <div className="text-2xl font-bold text-slate-700">{fmt(total)}</div>
-            {comparativa?.disponible && pasos[0].cambio !== undefined && renderCambio(pasos[0].cambio)}
-          </div>
+          <div className="text-2xl font-bold text-slate-700">{fmt(total)}</div>
           <div className="text-[10px] text-slate-400 mt-1">Total entradas</div>
         </div>
       </div>
 
       <div className="bg-white border border-violet-100 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-sm font-semibold text-slate-800">🎯 Etapas del Funnel</h3>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400 hidden md:inline">% sobre total de sesiones</span>
-            <span className="text-[10px] text-slate-400">💡 Pasa el mouse sobre las etapas</span>
-          </div>
-        </div>
+        <div className="flex items-center justify-between mb-5"><h3 className="text-sm font-semibold text-slate-800">🎯 Etapas del Funnel</h3></div>
         <div className="space-y-2">
           {pasos.map((paso, idx) => {
             const Icon = paso.icon;
             const width = Math.max(paso.pct, paso.valor > 0 ? 8 : 2);
             const isFirst = idx === 0;
             const drop = !isFirst && paso.dropOff > 0;
-            const conversionEntreEtapas = isFirst ? 100 : paso.pctAnterior;
-
             return (
               <div key={idx}>
                 {drop && (
                   <div className="flex items-center justify-center my-1.5 gap-3">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-rose-500">
-                      <ArrowDownRight className="w-3 h-3" />
-                      <span>-{paso.dropOff.toFixed(1)}% ({fmt(paso.perdidos)} perdidos)</span>
-                    </div>
-                    <div className="text-[10px] text-slate-300">|</div>
-                    <div className="flex items-center gap-1 text-[10px] font-semibold" style={{ color: conversionEntreEtapas > 50 ? '#10b981' : (conversionEntreEtapas > 10 ? '#f59e0b' : '#ef4444') }}>
-                      <span>✓ {conversionEntreEtapas.toFixed(1)}% convirtieron</span>
-                    </div>
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-rose-500"><ArrowDownRight className="w-3 h-3" /><span>-{paso.dropOff.toFixed(1)}% ({fmt(paso.perdidos)} perdidos)</span></div>
                   </div>
                 )}
-
-                <div
-                  className="flex items-center gap-3 group transition-all hover:bg-violet-50/30 rounded-lg p-1 -m-1 relative"
-                  onMouseEnter={() => setHoveredStep(idx)}
-                  onMouseLeave={() => setHoveredStep(null)}
-                >
+                <div className="flex items-center gap-3 group transition-all hover:bg-violet-50/30 rounded-lg p-1 -m-1 relative">
                   <div className="flex items-center gap-2 w-44 flex-shrink-0">
-                    <div className="p-1.5 rounded-md flex-shrink-0" style={{ backgroundColor: `${paso.color}20` }}>
-                      <Icon className="w-3.5 h-3.5" style={{ color: paso.color }} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-slate-800 truncate">{paso.emoji} {paso.nombre}</div>
-                      <div className="text-[10px] text-slate-400 truncate">{paso.descripcion}</div>
-                    </div>
+                    <div className="p-1.5 rounded-md flex-shrink-0" style={{ backgroundColor: `${paso.color}20` }}><Icon className="w-3.5 h-3.5" style={{ color: paso.color }} /></div>
+                    <div className="min-w-0"><div className="text-xs font-semibold text-slate-800 truncate">{paso.emoji} {paso.nombre}</div><div className="text-[10px] text-slate-400 truncate">{paso.descripcion}</div></div>
                   </div>
-
                   <div className="flex-1 relative h-12 bg-slate-50 rounded-lg overflow-hidden">
-                    <div
-                      className="h-full flex items-center justify-between px-4 transition-all duration-500 rounded-lg"
-                      style={{
-                        width: `${width}%`,
-                        background: `linear-gradient(90deg, ${paso.color}, ${paso.color}cc)`,
-                        minWidth: paso.valor > 0 ? '120px' : '60px'
-                      }}
-                    >
+                    <div className="h-full flex items-center justify-between px-4 transition-all duration-500 rounded-lg" style={{ width: `${width}%`, background: `linear-gradient(90deg, ${paso.color}, ${paso.color}cc)`, minWidth: paso.valor > 0 ? '120px' : '60px' }}>
                       <span className="text-white font-bold text-sm drop-shadow">{fmt(paso.valor)}</span>
                       <span className="text-white text-xs font-semibold opacity-90 drop-shadow">{paso.pct.toFixed(2)}%</span>
                     </div>
-                    {paso.valor > 0 && width < 15 && (
-                      <span className="absolute top-1/2 -translate-y-1/2 left-[125px] text-[10px] font-semibold text-slate-600">{paso.pct.toFixed(2)}%</span>
-                    )}
                   </div>
-
-                  {!isFirst && (
-                    <div className="w-28 text-right flex-shrink-0">
-                      <div className="text-xs font-bold" style={{ color: paso.pctAnterior > 50 ? GORUTY.success : (paso.pctAnterior > 10 ? GORUTY.warning : GORUTY.danger) }}>
-                        {paso.pctAnterior.toFixed(1)}%
-                      </div>
-                      <div className="text-[9px] text-slate-400">vs anterior</div>
-                      {comparativa?.disponible && paso.cambio !== undefined && (
-                        <div className="mt-1">{renderCambio(paso.cambio)}</div>
-                      )}
-                    </div>
-                  )}
-                  {isFirst && comparativa?.disponible && paso.cambio !== undefined && (
-                    <div className="w-28 text-right flex-shrink-0">
-                      <div className="text-[9px] text-slate-400 mb-0.5">vs período ant.</div>
-                      <div>{renderCambio(paso.cambio)}</div>
-                    </div>
-                  )}
-
-                  {hoveredStep === idx && (
-                    <div className="absolute left-44 top-full mt-2 z-50 bg-slate-900 text-white rounded-xl p-4 shadow-2xl min-w-[280px] pointer-events-none" style={{ marginLeft: '8px' }}>
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
-                        <span className="text-lg">{paso.emoji}</span>
-                        <div>
-                          <div className="text-sm font-bold">{paso.nombre}</div>
-                          <div className="text-[10px] text-slate-400">{paso.descripcion}</div>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5 text-xs">
-                        <div className="flex justify-between gap-4">
-                          <span className="text-slate-400">Usuarios:</span>
-                          <span className="font-bold text-white">{fmt(paso.valor)}</span>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <span className="text-slate-400">% del total:</span>
-                          <span className="font-semibold" style={{ color: paso.color }}>{paso.pct.toFixed(2)}%</span>
-                        </div>
-                        {!isFirst && (
-                          <>
-                            <div className="flex justify-between gap-4">
-                              <span className="text-slate-400">Convierten desde anterior:</span>
-                              <span className="font-semibold" style={{ color: paso.pctAnterior > 50 ? '#34d399' : '#fbbf24' }}>{paso.pctAnterior.toFixed(1)}%</span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                              <span className="text-slate-400">Caída en este paso:</span>
-                              <span className="font-semibold text-rose-400">-{paso.dropOff.toFixed(1)}%</span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                              <span className="text-slate-400">Usuarios perdidos:</span>
-                              <span className="font-semibold text-rose-400">{fmt(paso.perdidos)}</span>
-                            </div>
-                          </>
-                        )}
-                        {comparativa?.disponible && paso.cambio !== undefined && (
-                          <div className="flex justify-between gap-4 pt-1.5 mt-1.5 border-t border-slate-700">
-                            <span className="text-slate-400">vs período anterior:</span>
-                            <span className={`font-bold ${paso.cambio > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {paso.cambio > 0 ? '↑ +' : '↓ '}{paso.cambio.toFixed(1)}% ({fmt(paso.valorAnterior)})
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  {!isFirst && (<div className="w-28 text-right flex-shrink-0"><div className="text-xs font-bold" style={{ color: paso.pctAnterior > 50 ? GORUTY.success : (paso.pctAnterior > 10 ? GORUTY.warning : GORUTY.danger) }}>{paso.pctAnterior.toFixed(1)}%</div><div className="text-[9px] text-slate-400">vs anterior</div></div>)}
                 </div>
               </div>
             );
           })}
-        </div>
-      </div>
-
-      <div className="bg-white border border-violet-100 rounded-xl p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-800 mb-4">📋 Detalle por Etapa</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">Etapa</th>
-                <th className="py-2 px-3 text-right font-semibold">Usuarios</th>
-                <th className="py-2 px-3 text-right font-semibold">% vs Total</th>
-                <th className="py-2 px-3 text-right font-semibold">% Conv. Anterior</th>
-                <th className="py-2 px-3 text-right font-semibold">Drop-off</th>
-                <th className="py-2 px-3 text-right font-semibold">Perdidos</th>
-                {comparativa?.disponible && <th className="py-2 px-3 text-right font-semibold">vs Período Ant.</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {pasos.map((paso, i) => (
-                <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                  <td className="py-2.5 px-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{paso.emoji}</span>
-                      <span className="font-semibold text-slate-800">{paso.nombre}</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-semibold text-slate-900">{fmt(paso.valor)}</td>
-                  <td className="py-2.5 px-3 text-right" style={{ color: paso.color }}>{paso.pct.toFixed(2)}%</td>
-                  <td className="py-2.5 px-3 text-right text-slate-700">{i === 0 ? '—' : `${paso.pctAnterior.toFixed(1)}%`}</td>
-                  <td className="py-2.5 px-3 text-right">{i === 0 ? '—' : <span className="text-rose-600 font-semibold">{paso.dropOff.toFixed(1)}%</span>}</td>
-                  <td className="py-2.5 px-3 text-right text-slate-500">{i === 0 ? '—' : fmt(paso.perdidos)}</td>
-                  {comparativa?.disponible && (
-                    <td className="py-2.5 px-3 text-right">
-                      {paso.cambio !== undefined ? renderCambio(paso.cambio) : '—'}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {comparativa?.disponible && (
-            <div className="text-[10px] text-slate-400 mt-3 text-right">
-              📊 Comparando con período: {comparativa.rangoAnterior} ({comparativa.diasComparados} días)
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -1082,7 +1354,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
 
 // =============================================
 // 💬 CHAT CONVERSACIONAL
-// 🔧 CAMBIO 1: max-h-[600px] → max-h-[320px] (mitad, sigue scrollable)
 // =============================================
 function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, trendData }) {
   const [messages, setMessages] = useState([]);
@@ -1107,22 +1378,27 @@ function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, tren
 
     const dataContext = buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, trendData);
     const tieneSEO = dataContext.seo?.disponible;
-    const systemPrompt = `Eres un experto analista de marketing digital, Google Analytics 4 y SEO (Google Search Console) que ayuda al cliente "${currentClient?.nombre}".
+    const tieneAds = dataContext.googleAds?.disponible;
+    const systemPrompt = `Eres un experto analista de marketing digital, Google Analytics 4, SEO (Google Search Console) y Paid Media (Google Ads) que ayuda al cliente "${currentClient?.nombre}".
 
 DATOS COMPLETOS DEL CLIENTE:
 ${JSON.stringify(dataContext, null, 2)}
 
 ⚠️ IMPORTANTE — TIENES ACCESO A:
-- KPIs agregados del período seleccionado
+- KPIs agregados del período seleccionado (GA4)
 - Detalle DÍA POR DÍA en el array "datosDiarios"
 - Top canales, fuentes, países, ciudades, páginas, dispositivos, eventos${tieneSEO ? `
-- 🔍 DATOS SEO COMPLETOS de Google Search Console en el objeto "seo":
-  • Totales (clics, impresiones, CTR, posición promedio, total de keywords)
-  • "quickWins": keywords en posición 5-15 con +100 impresiones (oportunidades top)
-  • "topKeywords": las 30 keywords con más clics
-  • "subidas" y "caidas": movimientos de posición más relevantes
-  • "topPaginas": URLs con más tráfico orgánico segmentadas por sección
-  • "tendenciaDiaria": clics/impresiones/posición día por día (últimos 40 días)` : ''}
+- 🔍 DATOS SEO de Google Search Console: totales, quickWins, topKeywords, topPaginas` : ''}${tieneAds ? `
+- 📢 DATOS GOOGLE ADS COMPLETOS en el objeto "googleAds":
+  • totales (inversión, impresiones, clicks, ctr, cpc, conversiones, cpl, tasaConversion)
+  • campañas (con canal, estado, performance)
+  • topKeywords (con QS, match type, costo, conversiones)
+  • searchTerms (búsquedas reales que activaron anuncios)
+  • negativeKeywords (palabras excluidas, total y listado)
+  • landingPages (URLs de destino con performance)
+  • topAssets (creatividades headlines/descriptions/imágenes)
+  • audiencias (custom intent, user lists para display)
+  • geografia (LOCATION_OF_PRESENCE vs AREA_OF_INTEREST)` : ''}
 
 INSTRUCCIONES:
 - Responde SIEMPRE en español
@@ -1130,9 +1406,11 @@ INSTRUCCIONES:
 - Usa formato Markdown
 - Cita datos específicos (números reales del JSON)
 - NO inventes datos
-- Sé directo y práctico${tieneSEO ? `
-- Para preguntas SEO, prioriza Quick Wins, analiza caídas con causa probable y sugiere acciones concretas (mejorar title, contenido, snippets)
-- Distingue entre "tráfico SEO" (orgánico, del objeto seo) y "tráfico GA4" (todos los canales)` : ''}`;
+- Sé directo y práctico${tieneAds ? `
+- Para preguntas Google Ads, prioriza eficiencia (CPL bajo) sobre volumen, sugiere keywords negativas viendo searchTerms con 0 conv, alerta sobre Quality Scores bajos (<4) y assets con bajo CTR
+- Distingue entre Display y Search por canal: típicamente Search es más eficiente que Display en CPL` : ''}${tieneSEO ? `
+- Para preguntas SEO, prioriza Quick Wins, analiza caídas con causa probable
+- Distingue entre "tráfico SEO" (orgánico) y "tráfico Ads" (pagado) y "tráfico GA4" (todos)` : ''}`;
 
     const apiMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
 
@@ -1160,32 +1438,25 @@ INSTRUCCIONES:
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-lg flex-shrink-0" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}><MessageSquare className="w-5 h-5 text-white" /></div>
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              Pregunta a Claude
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>💬 Chat</span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🔒 Solo Admin</span>
-            </h3>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">Pregunta a Claude<span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>💬 Chat</span><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🔒 Solo Admin</span></h3>
             <p className="text-xs text-slate-500 mt-0.5">Conversa libremente sobre los datos de {currentClient?.emoji} {currentClient?.nombre} · {messages.length > 0 ? `${messages.length} mensajes` : 'Sin mensajes'}</p>
           </div>
         </div>
         {messages.length > 0 && (<button onClick={clearChat} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition text-slate-600 hover:text-rose-600 hover:bg-rose-50 font-medium border border-slate-200 hover:border-rose-200"><Trash2 className="w-3.5 h-3.5" />Nueva conversación</button>)}
       </div>
 
-      {/* 🔧 CAMBIO 1 APLICADO: max-h-[600px] → max-h-[320px] (la mitad) */}
-      <div className="p-5 max-h-[320px] overflow-y-auto">
+      <div className="p-5 max-h-[600px] overflow-y-auto">
         {messages.length === 0 && !loading && (
-          <div className="text-center py-6">
-            <div className="flex justify-center mb-3"><div className="p-3 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}><MessageSquare className="w-6 h-6" style={{ color: GORUTY.primary }} /></div></div>
-            <p className="text-sm text-slate-700 font-semibold mb-1">¡Hola! Soy Claude 👋</p>
-            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">Tengo acceso a todos los datos GA4 y SEO (Search Console) de <strong>{currentClient?.nombre}</strong>.</p>
-            <p className="text-[11px] text-slate-400 mt-2">Escribe tu pregunta abajo para empezar</p>
+          <div className="text-center py-8">
+            <div className="flex justify-center mb-4"><div className="p-4 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}><MessageSquare className="w-8 h-8" style={{ color: GORUTY.primary }} /></div></div>
+            <p className="text-sm text-slate-700 font-semibold mb-2">¡Hola! Soy Claude 👋</p>
+            <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">Tengo acceso a todos los datos GA4, SEO y Google Ads de <strong>{currentClient?.nombre}</strong>, incluyendo el detalle día por día y el funnel de conversión.</p>
+            <p className="text-xs text-slate-400 mt-4">Escribe tu pregunta abajo para empezar</p>
           </div>
         )}
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex gap-3 mb-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className="flex-shrink-0">
-              {msg.role === 'user' ? (<div className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white font-bold" style={{ background: `linear-gradient(135deg, ${GORUTY.tertiary}, ${GORUTY.secondary})` }}>TÚ</div>) : (<div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><Bot className="w-4 h-4 text-white" /></div>)}
-            </div>
+            <div className="flex-shrink-0">{msg.role === 'user' ? (<div className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white font-bold" style={{ background: `linear-gradient(135deg, ${GORUTY.tertiary}, ${GORUTY.secondary})` }}>TÚ</div>) : (<div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><Bot className="w-4 h-4 text-white" /></div>)}</div>
             <div className={`flex-1 ${msg.role === 'user' ? 'max-w-[80%]' : 'max-w-[90%]'}`}>
               <div className={`rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'rounded-tr-sm' : 'rounded-tl-sm border border-violet-100'}`} style={msg.role === 'user' ? { background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` } : { backgroundColor: '#fafaff' }}>
                 {msg.role === 'user' ? (<p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{msg.content}</p>) : (<div className="prose prose-slate max-w-none">{renderMarkdown(msg.content, GORUTY.primary)}</div>)}
@@ -1202,11 +1473,7 @@ INSTRUCCIONES:
             <div className="flex-shrink-0"><div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><Bot className="w-4 h-4 text-white" /></div></div>
             <div className="flex-1">
               <div className="rounded-2xl rounded-tl-sm border border-violet-100 px-4 py-3 inline-flex items-center gap-2" style={{ backgroundColor: '#fafaff' }}>
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '300ms' }}></div>
-                </div>
+                <div className="flex gap-1"><div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '0ms' }}></div><div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '150ms' }}></div><div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '300ms' }}></div></div>
                 <span className="text-xs text-slate-500 ml-1">Claude está escribiendo...</span>
               </div>
             </div>
@@ -1292,15 +1559,15 @@ function Dashboard({ session, onLogout }) {
 
   useEffect(() => { if (Object.keys(clientCache).length === 0) handleRefresh(); /* eslint-disable-next-line */ }, []);
 
-  // 🔧 CAMBIOS 2 + 4: TODAS las pestañas comprimidas al inicio (incluido aiChat)
   const [sections, setSections] = useState({
-    aiChat: false,    // 🔧 CAMBIO 4: chat parte comprimido
-    funnel: false,    // 🔧 CAMBIO 2: comprimido
-    seo: false,       // 🔧 CAMBIO 2: comprimido
-    acquisition: false,
-    audience: false,
-    behavior: false,
-    engagement: false,
+    aiChat: true,
+    funnel: true,
+    seo: true,
+    paidMedia: true,  // 🆕 Paid Media abierto por defecto
+    acquisition: true,
+    audience: true,
+    behavior: true,
+    engagement: true,
     events: false,
     advanced: false,
   });
@@ -1646,16 +1913,6 @@ function Dashboard({ session, onLogout }) {
               <div className="mt-3 text-xs text-slate-500">Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos{dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}</div>
             </div>
 
-            {/* 🔧 CAMBIO 3 APLICADO: Chat con Claude MOVIDO ARRIBA — antes de los KPIs */}
-            {/* 🔒 CHAT IA — SOLO ADMIN — Ahora aparece arriba de los 12 KPIs */}
-            {isAdmin && (
-              <>
-                <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" />
-                {sections.aiChat && (<div className="mb-6"><AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} /></div>)}
-              </>
-            )}
-
-            {/* 12 KPIs — quedan abajo del Chat */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
               <KpiCard icon={Users} label="Usuarios Activos" value={fmt(kpis.usuarios)} accentColor={GORUTY.primary} trend={8.4} />
               <KpiCard icon={Users} label="Usuarios Nuevos" value={fmt(kpis.usuariosNuevos)} accentColor={GORUTY.secondary} trend={6.2} />
@@ -1672,6 +1929,13 @@ function Dashboard({ session, onLogout }) {
               <KpiCard icon={Activity} label="Sesiones Comp." value={fmt(kpis.sesionesEng)} accentColor={GORUTY.accent} />
               <KpiCard icon={Target} label="Tasa Conv." value={`${kpis.tasaConversionSesion}%`} accentColor={GORUTY.deepPurple} />
             </div>
+
+            {isAdmin && (
+              <>
+                <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" />
+                {sections.aiChat && (<div className="mb-6"><AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} /></div>)}
+              </>
+            )}
 
             <Panel title="📈 Tendencia Temporal — Usuarios, Sesiones y Conversiones" className="mb-6">
               <ResponsiveContainer width="100%" height={320}>
@@ -1711,6 +1975,14 @@ function Dashboard({ session, onLogout }) {
             {sections.funnel && (
               <div className="mb-6">
                 <ConversionFunnel liveData={liveData} kpis={kpis} dateFilter={dateFilter} currentClient={currentClient} dateRange={dateRange} trendData={trendData} />
+              </div>
+            )}
+
+            {/* 🆕 PAID MEDIA — Google Ads / Meta / LinkedIn */}
+            <SectionHeader title="Paid Media" subtitle="Performance de campañas pagadas — Google Ads, Meta, LinkedIn" icon={Megaphone} sectionKey="paidMedia" badge={liveData?.googleAds?.disponible ? '📢 Ads' : '🔜 Pronto'} />
+            {sections.paidMedia && (
+              <div className="mb-6">
+                <PaidMediaSection liveData={liveData} currentClient={currentClient} />
               </div>
             )}
 
