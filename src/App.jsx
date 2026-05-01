@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, FunnelChart, Funnel, LabelList } from 'recharts';
-import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight, Search, Megaphone, Ban, Award, Image as ImageIcon, MapPin } from 'lucide-react';
+import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown, ChevronRight, Filter, RefreshCw, Activity, DollarSign, Plus, X, Building2, Check, Lock, LogOut, User as UserIcon, Eye as EyeIcon, EyeOff, AlertCircle, Bot, Send, MessageSquare, Trash2, Copy, CheckCheck, TrendingDown, AlertTriangle, ShoppingCart, CreditCard, Heart, Move, ArrowDownRight, Megaphone, Award, Image as ImageIcon, MapPin, History, Layers, FileText } from 'lucide-react';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUkLrgfuo1k-RuTPc7VtVrlenEv58LTMAP07l-CxPpgcCqtVw/exec';
 
@@ -28,6 +28,44 @@ const GorutyLogo = ({ size = 40 }) => (
     style={{ width: size, height: size }}
   />
 );
+
+// 🆕 v8 — HELPER: Agrega data diaria de Google Ads por dimensión
+function aggregateAdsData(rows, groupByField) {
+  const map = {};
+  rows.forEach(r => {
+    const key = r[groupByField] || 'Sin definir';
+    if (!map[key]) {
+      map[key] = {
+        [groupByField]: key,
+        impressions: 0, clicks: 0, cost: 0,
+        conversions: 0, conversions_value: 0,
+        all_conversions: 0, all_conversions_value: 0,
+        _meta: {}
+      };
+    }
+    map[key].impressions += Number(r.impressions) || 0;
+    map[key].clicks += Number(r.clicks) || 0;
+    map[key].cost += Number(r.cost) || 0;
+    map[key].conversions += Number(r.conversions) || 0;
+    map[key].conversions_value += Number(r.conversions_value) || 0;
+    map[key].all_conversions += Number(r.all_conversions) || 0;
+    map[key].all_conversions_value += Number(r.all_conversions_value) || 0;
+    if (r.campaign_channel_type && !map[key]._meta.channel_type) map[key]._meta.channel_type = r.campaign_channel_type;
+    if (r.campaign_status && !map[key]._meta.status) map[key]._meta.status = r.campaign_status;
+    if (r.bidding_strategy && !map[key]._meta.bidding_strategy) map[key]._meta.bidding_strategy = r.bidding_strategy;
+    if (r.campaign_name && !map[key]._meta.campaign_name) map[key]._meta.campaign_name = r.campaign_name;
+    if (r.ad_group_name && !map[key]._meta.ad_group_name) map[key]._meta.ad_group_name = r.ad_group_name;
+    if (r.ad_type && !map[key]._meta.ad_type) map[key]._meta.ad_type = r.ad_type;
+    if (r.ad_final_urls && !map[key]._meta.ad_final_urls) map[key]._meta.ad_final_urls = r.ad_final_urls;
+  });
+  return Object.values(map).map(r => ({
+    ...r,
+    ctr: r.impressions > 0 ? r.clicks / r.impressions : 0,
+    avg_cpc: r.clicks > 0 ? r.cost / r.clicks : 0,
+    cost_per_conversion: r.conversions > 0 ? r.cost / r.conversions : 0,
+    conversion_rate: r.clicks > 0 ? r.conversions / r.clicks : 0
+  }));
+}
 
 function buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, trendData) {
   return {
@@ -139,162 +177,109 @@ function buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, t
     seo: (() => {
       const seoData = liveData?.seo;
       if (!seoData?.disponible) return { disponible: false };
-
       const keywords = seoData.keywords || [];
       const paginas = seoData.paginasSEO || [];
-      const tendencia = seoData.tendenciaSEO || [];
-      const movimientos = seoData.posicionesSEO || [];
-
       const totalClics = keywords.reduce((s, k) => s + (Number(k['Clics']) || 0), 0);
       const totalImpr = keywords.reduce((s, k) => s + (Number(k['Impresiones']) || 0), 0);
       const ctrPromedio = totalImpr > 0 ? ((totalClics / totalImpr) * 100).toFixed(2) : 0;
       const posicionPromedio = keywords.length > 0
         ? (keywords.reduce((s, k) => s + (Number(k['Posición Promedio']) || 0), 0) / keywords.length).toFixed(1)
         : 0;
-
       const quickWins = keywords.filter(k => {
         const pos = Number(k['Posición Promedio']) || 999;
         const impr = Number(k['Impresiones']) || 0;
         return pos >= 5 && pos <= 15 && impr >= 100;
       }).sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0)).slice(0, 20);
-
       const topKeywords = [...keywords]
         .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
         .slice(0, 30)
-        .map(k => ({
-          keyword: k['Keyword'],
-          clics: Number(k['Clics']) || 0,
-          impresiones: Number(k['Impresiones']) || 0,
-          ctr: k['CTR (%)'],
-          posicion: Number(k['Posición Promedio']) || 0
-        }));
-
+        .map(k => ({ keyword: k['Keyword'], clics: Number(k['Clics']) || 0, impresiones: Number(k['Impresiones']) || 0, ctr: k['CTR (%)'], posicion: Number(k['Posición Promedio']) || 0 }));
       return {
         disponible: true,
         totales: { totalClics, totalImpresiones: totalImpr, ctrPromedio, posicionPromedio, totalKeywords: keywords.length },
-        quickWins,
-        topKeywords,
+        quickWins, topKeywords,
         topPaginas: [...paginas].sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0)).slice(0, 15)
       };
     })(),
 
-    // 📢 CONTEXTO GOOGLE ADS
+    // 📢 CONTEXTO GOOGLE ADS — v8
     googleAds: (() => {
       const adsData = liveData?.googleAds;
       if (!adsData?.disponible) return { disponible: false };
+      const datos = adsData.datos || [];
+      const cambios = adsData.cambios || [];
+      const estado = adsData.estado || [];
+      const datosGrupos = adsData.datosGrupos || [];
+      const datosAnuncios = adsData.datosAnuncios || [];
 
-      const camp = adsData.campañas || [];
-      const kw = adsData.keywords || [];
-      const st = adsData.searchTerms || [];
-      const neg = adsData.negativeKeywords || [];
-      const lp = adsData.landingPages || [];
-      const assets = adsData.assets || [];
-      const aud = adsData.audiencias || [];
-      const geo = adsData.geografia || [];
-
-      const totalCosto = camp.reduce((s, c) => s + (Number(c['Costo']) || 0), 0);
-      const totalImpr = camp.reduce((s, c) => s + (Number(c['Impresiones']) || 0), 0);
-      const totalClicks = camp.reduce((s, c) => s + (Number(c['Clicks']) || 0), 0);
-      const totalConv = camp.reduce((s, c) => s + (Number(c['Conversiones']) || 0), 0);
-      const cpl = totalConv > 0 ? totalCosto / totalConv : 0;
+      const totalCosto = datos.reduce((s, r) => s + (Number(r.cost) || 0), 0);
+      const totalImpr = datos.reduce((s, r) => s + (Number(r.impressions) || 0), 0);
+      const totalClicks = datos.reduce((s, r) => s + (Number(r.clicks) || 0), 0);
+      const totalConv = datos.reduce((s, r) => s + (Number(r.conversions) || 0), 0);
+      const totalValor = datos.reduce((s, r) => s + (Number(r.conversions_value) || 0), 0);
       const ctr = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0;
       const cpc = totalClicks > 0 ? totalCosto / totalClicks : 0;
+      const cpl = totalConv > 0 ? totalCosto / totalConv : 0;
       const tasaConv = totalClicks > 0 ? (totalConv / totalClicks) * 100 : 0;
+
+      const campañasAgg = aggregateAdsData(datos, 'campaign_name');
+      const topCampañas = campañasAgg.sort((a, b) => b.cost - a.cost).slice(0, 25).map(c => ({
+        campaña: c.campaign_name, canal: c._meta.channel_type, estado: c._meta.status,
+        biddingStrategy: c._meta.bidding_strategy,
+        impresiones: c.impressions, clicks: c.clicks,
+        ctr: (c.ctr * 100).toFixed(2) + '%', cpc: Math.round(c.avg_cpc),
+        costo: Math.round(c.cost), conversiones: Number(c.conversions.toFixed(2)),
+        costoConv: Math.round(c.cost_per_conversion), valorConv: Math.round(c.conversions_value)
+      }));
+
+      const estadoCampañas = estado.filter(e => e.nivel === 'CAMPAIGN').map(e => ({
+        campaña: e.name, estado: e.status, canal: e.channel_type,
+        biddingStrategy: e.bidding_strategy,
+        budgetLimited: e.budget_limited === true || e.budget_limited === 'TRUE',
+        budgetLostIs: Number(e.budget_lost_is) || 0,
+        approvalStatus: e.approval_status,
+        impresiones7d: Number(e.impressions_7d) || 0,
+        clicks7d: Number(e.clicks_7d) || 0,
+        costo7d: Number(e.cost_7d) || 0,
+        conversiones7d: Number(e.conversions_7d) || 0,
+        ctr7d: ((Number(e.ctr_7d) || 0) * 100).toFixed(2) + '%'
+      }));
+      const alertas = estadoCampañas.filter(c => c.estado === 'ENABLED' && (c.budgetLimited || c.budgetLostIs > 0.20));
+
+      const cambiosRecientes = [...cambios]
+        .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')))
+        .slice(0, 50)
+        .map(c => ({ timestamp: c.timestamp, nivel: c.nivel, nombre: c.name, tipoCambio: c.tipo_cambio, valorAnterior: c.valor_anterior, valorNuevo: c.valor_nuevo }));
+
+      const gruposAgg = aggregateAdsData(datosGrupos, 'ad_group_name');
+      const topGrupos = gruposAgg.sort((a, b) => b.cost - a.cost).slice(0, 20).map(g => ({
+        adGroup: g.ad_group_name, campaña: g._meta.campaign_name, canal: g._meta.channel_type,
+        impresiones: g.impressions, clicks: g.clicks, costo: Math.round(g.cost),
+        conversiones: Number(g.conversions.toFixed(2)), costoConv: Math.round(g.cost_per_conversion)
+      }));
+
+      const anunciosAgg = aggregateAdsData(datosAnuncios, 'ad_id');
+      const topAnuncios = anunciosAgg.sort((a, b) => b.impressions - a.impressions).slice(0, 25).map(a => ({
+        adId: a.ad_id, adType: a._meta.ad_type, campaña: a._meta.campaign_name,
+        finalUrl: a._meta.ad_final_urls,
+        impresiones: a.impressions, clicks: a.clicks,
+        ctr: (a.ctr * 100).toFixed(2) + '%', costo: Math.round(a.cost),
+        conversiones: Number(a.conversions.toFixed(2))
+      }));
 
       return {
         disponible: true,
         totales: {
-          inversion: totalCosto,
-          impresiones: totalImpr,
-          clicks: totalClicks,
-          ctr: ctr.toFixed(2),
-          cpc: cpc.toFixed(0),
-          conversiones: totalConv,
-          cpl: cpl.toFixed(0),
-          tasaConversion: tasaConv.toFixed(2)
+          inversion: Math.round(totalCosto), impresiones: totalImpr, clicks: totalClicks,
+          ctr: ctr.toFixed(2), cpc: Math.round(cpc),
+          conversiones: Number(totalConv.toFixed(2)), valorConversiones: Math.round(totalValor),
+          cpl: Math.round(cpl), tasaConversion: tasaConv.toFixed(2)
         },
-        campañas: camp.map(c => ({
-          nombre: c['Campaña'],
-          canal: c['Canal'],
-          estado: c['Estado'],
-          impresiones: Number(c['Impresiones']) || 0,
-          clicks: Number(c['Clicks']) || 0,
-          costo: Number(c['Costo']) || 0,
-          ctr: c['CTR'],
-          cpc: Number(c['CPC']) || 0,
-          conversiones: Number(c['Conversiones']) || 0,
-          costoConv: Number(c['Costo/Conv.']) || 0,
-          isBusqueda: c['IS Búsqueda'],
-          isPerdidoPresup: c['IS Perdido Presup.']
-        })),
-        topKeywords: [...kw].sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0)).slice(0, 20).map(k => ({
-          keyword: k['Keyword'],
-          matchType: k['Match Type'],
-          qs: Number(k['QS']) || null,
-          impresiones: Number(k['Impresiones']) || 0,
-          clicks: Number(k['Clicks']) || 0,
-          costo: Number(k['Costo']) || 0,
-          conversiones: Number(k['Conversiones']) || 0,
-          costoConv: Number(k['Costo/Conv.']) || 0
-        })),
-        searchTerms: [...st].sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0)).slice(0, 30).map(s => ({
-          term: s['Search Term'],
-          status: s['Status'],
-          keywordOrigen: s['Keyword Origen'],
-          impresiones: Number(s['Impresiones']) || 0,
-          clicks: Number(s['Clicks']) || 0,
-          costo: Number(s['Costo']) || 0,
-          conversiones: Number(s['Conversiones']) || 0
-        })),
-        negativeKeywords: {
-          total: neg.length,
-          porCampaña: neg.reduce((acc, n) => {
-            const c = n['Campaña'];
-            if (!acc[c]) acc[c] = 0;
-            acc[c]++;
-            return acc;
-          }, {}),
-          listado: neg.slice(0, 20).map(n => ({
-            keyword: n['Keyword Negativa'],
-            campaña: n['Campaña'],
-            matchType: n['Match Type']
-          }))
-        },
-        landingPages: lp.map(l => ({
-          url: l['Landing Page'],
-          impresiones: Number(l['Impresiones']) || 0,
-          clicks: Number(l['Clicks']) || 0,
-          costo: Number(l['Costo']) || 0,
-          conversiones: Number(l['Conversiones']) || 0
-        })),
-        topAssets: [...assets].sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0)).slice(0, 15).map(a => ({
-          texto: a['Texto'] || a['Asset Name'],
-          tipo: a['Tipo Asset'],
-          fieldType: a['Field Type'],
-          impresiones: Number(a['Impresiones']) || 0,
-          clicks: Number(a['Clicks']) || 0,
-          ctr: a['CTR'],
-          conversiones: Number(a['Conversiones']) || 0
-        })),
-        audiencias: aud.map(a => ({
-          tipo: a['Tipo'],
-          impresiones: Number(a['Impresiones']) || 0,
-          clicks: Number(a['Clicks']) || 0,
-          costo: Number(a['Costo']) || 0
-        })),
-        geografia: geo.map(g => ({
-          locationType: g['Location Type'],
-          campaña: g['Campaña'],
-          impresiones: Number(g['Impresiones']) || 0,
-          clicks: Number(g['Clicks']) || 0,
-          costo: Number(g['Costo']) || 0,
-          conversiones: Number(g['Conversiones']) || 0
-        }))
+        topCampañas, estadoCampañas, alertas, cambiosRecientes, topGrupos, topAnuncios
       };
     })()
   };
 }
-
 function renderMarkdown(text, gorutyPrimary) {
   if (!text) return null;
   const lines = text.split('\n');
@@ -403,48 +388,30 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// =============================================
-// 🔍 SEO SECTION — Google Search Console
-// =============================================
 function SEOSection({ liveData, currentClient }) {
   const seoData = liveData?.seo;
 
   const seoComputed = useMemo(() => {
     if (!seoData?.disponible) return null;
-
     const keywords = seoData.keywords || [];
     const paginas = seoData.paginasSEO || [];
     const tendencia = seoData.tendenciaSEO || [];
     const movimientos = seoData.posicionesSEO || [];
-
     const totalClics = keywords.reduce((s, k) => s + (Number(k['Clics']) || 0), 0);
     const totalImpresiones = keywords.reduce((s, k) => s + (Number(k['Impresiones']) || 0), 0);
     const ctrPromedio = totalImpresiones > 0 ? ((totalClics / totalImpresiones) * 100) : 0;
     const posicionPromedio = keywords.length > 0
       ? (keywords.reduce((s, k) => s + (Number(k['Posición Promedio']) || 0), 0) / keywords.length)
       : 0;
-
     const quickWins = keywords.filter(k => {
       const pos = Number(k['Posición Promedio']) || 999;
       const impr = Number(k['Impresiones']) || 0;
       return pos >= 5 && pos <= 15 && impr >= 100;
     }).sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0)).slice(0, 25);
-
-    const topKeywords = [...keywords]
-      .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
-      .slice(0, 25);
-
-    const subidas = movimientos.filter(m => (Number(m['Cambio']) || 0) > 0)
-      .sort((a, b) => (Number(b['Cambio']) || 0) - (Number(a['Cambio']) || 0))
-      .slice(0, 15);
-    const caidas = movimientos.filter(m => (Number(m['Cambio']) || 0) < 0)
-      .sort((a, b) => (Number(a['Cambio']) || 0) - (Number(b['Cambio']) || 0))
-      .slice(0, 15);
-
-    const topPaginas = [...paginas]
-      .sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0))
-      .slice(0, 20);
-
+    const topKeywords = [...keywords].sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0)).slice(0, 25);
+    const subidas = movimientos.filter(m => (Number(m['Cambio']) || 0) > 0).sort((a, b) => (Number(b['Cambio']) || 0) - (Number(a['Cambio']) || 0)).slice(0, 15);
+    const caidas = movimientos.filter(m => (Number(m['Cambio']) || 0) < 0).sort((a, b) => (Number(a['Cambio']) || 0) - (Number(b['Cambio']) || 0)).slice(0, 15);
+    const topPaginas = [...paginas].sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0)).slice(0, 20);
     const trendData = tendencia.slice(-40).map(t => ({
       fecha: String(t['Fecha'] || '').slice(5, 10),
       fechaCompleta: String(t['Fecha'] || '').slice(0, 10),
@@ -452,7 +419,6 @@ function SEOSection({ liveData, currentClient }) {
       impresiones: Number(t['Impresiones']) || 0,
       posicion: Number(t['Posición Promedio']) || 0
     }));
-
     return {
       totalClics, totalImpresiones, ctrPromedio, posicionPromedio,
       totalKeywords: keywords.length,
@@ -471,7 +437,6 @@ function SEOSection({ liveData, currentClient }) {
       </div>
     );
   }
-
   if (!seoComputed) return null;
 
   const fmt = (n) => Number(n).toLocaleString('es-CL');
@@ -633,14 +598,9 @@ function SEOSection({ liveData, currentClient }) {
   );
 }
 
-// =============================================
-// 📢 PAID MEDIA — Google Ads / Meta / LinkedIn
-// =============================================
 function PaidMediaSection({ liveData, currentClient }) {
   const [activePlatform, setActivePlatform] = useState('googleAds');
-
   const tieneGoogleAds = liveData?.googleAds?.disponible;
-  // Future: tieneMetaAds, tieneLinkedInAds
 
   const platforms = [
     { id: 'googleAds', label: 'Google Ads', icon: '🟡', available: tieneGoogleAds },
@@ -662,130 +622,98 @@ function PaidMediaSection({ liveData, currentClient }) {
 
   return (
     <div className="space-y-5">
-      {/* Tabs de plataformas */}
       <div className="bg-white rounded-2xl p-2 border border-violet-100 shadow-sm flex gap-1">
         {platforms.map(p => (
           <button
             key={p.id}
             onClick={() => p.available && setActivePlatform(p.id)}
             disabled={!p.available}
-            className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 ${
-              activePlatform === p.id
-                ? 'text-white shadow-md'
-                : p.available
-                  ? 'text-slate-700 hover:bg-violet-50'
-                  : 'text-slate-400 cursor-not-allowed'
-            }`}
+            className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 ${activePlatform === p.id ? 'text-white shadow-md' : p.available ? 'text-slate-700 hover:bg-violet-50' : 'text-slate-400 cursor-not-allowed'}`}
             style={activePlatform === p.id ? { background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` } : {}}
           >
-            <span>{p.icon}</span>
-            <span>{p.label}</span>
-            {p.badge && (
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${activePlatform === p.id ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-700'}`}>
-                {p.badge}
-              </span>
-            )}
+            <span>{p.icon}</span><span>{p.label}</span>
+            {p.badge && (<span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${activePlatform === p.id ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-700'}`}>{p.badge}</span>)}
           </button>
         ))}
       </div>
-
-      {/* Contenido según plataforma */}
       {activePlatform === 'googleAds' && tieneGoogleAds && (
         <GoogleAdsTab adsData={liveData.googleAds} currentClient={currentClient} />
       )}
     </div>
   );
 }
-
-// =============================================
-// 🟡 GOOGLE ADS TAB
-// =============================================
 function GoogleAdsTab({ adsData, currentClient }) {
+  const [activeSubtab, setActiveSubtab] = useState('overview');
+
   const computed = useMemo(() => {
-    const camp = adsData.campañas || [];
-    const campDiario = adsData.campañasDiario || [];
-    const kw = adsData.keywords || [];
-    const st = adsData.searchTerms || [];
-    const neg = adsData.negativeKeywords || [];
-    const lp = adsData.landingPages || [];
-    const assets = adsData.assets || [];
-    const aud = adsData.audiencias || [];
-    const geo = adsData.geografia || [];
+    const datos = adsData.datos || [];
+    const cambios = adsData.cambios || [];
+    const estado = adsData.estado || [];
+    const datosGrupos = adsData.datosGrupos || [];
+    const datosAnuncios = adsData.datosAnuncios || [];
 
-    // KPIs totales
-    const totalCosto = camp.reduce((s, c) => s + (Number(c['Costo']) || 0), 0);
-    const totalImpr = camp.reduce((s, c) => s + (Number(c['Impresiones']) || 0), 0);
-    const totalClicks = camp.reduce((s, c) => s + (Number(c['Clicks']) || 0), 0);
-    const totalConv = camp.reduce((s, c) => s + (Number(c['Conversiones']) || 0), 0);
-    const totalValor = camp.reduce((s, c) => s + (Number(c['Valor Conv.']) || 0), 0);
-
+    const totalCosto = datos.reduce((s, r) => s + (Number(r.cost) || 0), 0);
+    const totalImpr = datos.reduce((s, r) => s + (Number(r.impressions) || 0), 0);
+    const totalClicks = datos.reduce((s, r) => s + (Number(r.clicks) || 0), 0);
+    const totalConv = datos.reduce((s, r) => s + (Number(r.conversions) || 0), 0);
+    const totalValor = datos.reduce((s, r) => s + (Number(r.conversions_value) || 0), 0);
     const ctr = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0;
     const cpc = totalClicks > 0 ? totalCosto / totalClicks : 0;
     const cpl = totalConv > 0 ? totalCosto / totalConv : 0;
     const tasaConv = totalClicks > 0 ? (totalConv / totalClicks) * 100 : 0;
+    const roas = totalCosto > 0 ? totalValor / totalCosto : 0;
 
-    // Tendencia diaria agregada
     const trendMap = {};
-    campDiario.forEach(d => {
-      const fecha = String(d['Fecha'] || '').slice(0, 10);
+    datos.forEach(d => {
+      const fecha = String(d.date || '').slice(0, 10);
       if (!fecha) return;
-      if (!trendMap[fecha]) trendMap[fecha] = { fechaCompleta: fecha, fecha: fecha.slice(5), costo: 0, clicks: 0, impresiones: 0, conversiones: 0 };
-      trendMap[fecha].costo += Number(d['Costo']) || 0;
-      trendMap[fecha].clicks += Number(d['Clicks']) || 0;
-      trendMap[fecha].impresiones += Number(d['Impresiones']) || 0;
-      trendMap[fecha].conversiones += Number(d['Conversiones']) || 0;
+      if (!trendMap[fecha]) trendMap[fecha] = { fechaCompleta: fecha, fecha: fecha.slice(5), cost: 0, clicks: 0, impressions: 0, conversions: 0, conversions_value: 0 };
+      trendMap[fecha].cost += Number(d.cost) || 0;
+      trendMap[fecha].clicks += Number(d.clicks) || 0;
+      trendMap[fecha].impressions += Number(d.impressions) || 0;
+      trendMap[fecha].conversions += Number(d.conversions) || 0;
+      trendMap[fecha].conversions_value += Number(d.conversions_value) || 0;
     });
     const trendData = Object.values(trendMap).sort((a, b) => a.fechaCompleta.localeCompare(b.fechaCompleta));
 
-    // Distribución por canal
-    const distribCanal = {};
-    camp.forEach(c => {
-      const canal = c['Canal'] || 'Otro';
-      if (!distribCanal[canal]) distribCanal[canal] = { canal, costo: 0, conversiones: 0, clicks: 0 };
-      distribCanal[canal].costo += Number(c['Costo']) || 0;
-      distribCanal[canal].conversiones += Number(c['Conversiones']) || 0;
-      distribCanal[canal].clicks += Number(c['Clicks']) || 0;
+    const campañas = aggregateAdsData(datos, 'campaign_name').sort((a, b) => b.cost - a.cost);
+
+    const canalesMap = {};
+    datos.forEach(d => {
+      const canal = d.campaign_channel_type || 'Otro';
+      if (!canalesMap[canal]) canalesMap[canal] = { canal, cost: 0, conversions: 0, clicks: 0, impressions: 0 };
+      canalesMap[canal].cost += Number(d.cost) || 0;
+      canalesMap[canal].conversions += Number(d.conversions) || 0;
+      canalesMap[canal].clicks += Number(d.clicks) || 0;
+      canalesMap[canal].impressions += Number(d.impressions) || 0;
     });
-    const canalesArr = Object.values(distribCanal);
+    const canalesArr = Object.values(canalesMap).sort((a, b) => b.cost - a.cost);
 
-    // Top keywords (por costo)
-    const topKeywords = [...kw]
-      .filter(k => Number(k['Costo']) > 0 || Number(k['Impresiones']) > 0)
-      .sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0))
-      .slice(0, 30);
+    const estadoCampañas = estado.filter(e => e.nivel === 'CAMPAIGN');
+    const alertas = estadoCampañas.filter(c =>
+      c.status === 'ENABLED' && (
+        c.budget_limited === true || c.budget_limited === 'TRUE' ||
+        (Number(c.budget_lost_is) || 0) > 0.20
+      )
+    );
+    const cambiosOrdenados = [...cambios].sort((a, b) =>
+      String(b.timestamp || '').localeCompare(String(a.timestamp || ''))
+    );
 
-    // Top search terms
-    const topSearchTerms = [...st]
-      .sort((a, b) => (Number(b['Costo']) || 0) - (Number(a['Costo']) || 0))
-      .slice(0, 30);
+    const grupos = aggregateAdsData(datosGrupos, 'ad_group_id')
+      .map(g => ({ ...g, ad_group_name: g._meta.ad_group_name || g.ad_group_id, campaign_name: g._meta.campaign_name, channel_type: g._meta.channel_type }))
+      .sort((a, b) => b.cost - a.cost);
 
-    // Top assets
-    const topAssets = [...assets]
-      .filter(a => Number(a['Impresiones']) > 0)
-      .sort((a, b) => (Number(b['Impresiones']) || 0) - (Number(a['Impresiones']) || 0))
-      .slice(0, 25);
-
-    // Negative keywords agrupadas
-    const negPorCampaña = {};
-    neg.forEach(n => {
-      const c = n['Campaña'] || 'Sin campaña';
-      if (!negPorCampaña[c]) negPorCampaña[c] = 0;
-      negPorCampaña[c]++;
-    });
+    const anuncios = aggregateAdsData(datosAnuncios, 'ad_id')
+      .map(a => ({ ...a, campaign_name: a._meta.campaign_name, ad_group_name: a._meta.ad_group_name, ad_type: a._meta.ad_type, ad_final_urls: a._meta.ad_final_urls }))
+      .sort((a, b) => b.impressions - a.impressions);
 
     return {
-      totales: { totalCosto, totalImpr, totalClicks, totalConv, totalValor, ctr, cpc, cpl, tasaConv },
-      campañas: camp,
-      trendData,
-      canalesArr,
-      topKeywords,
-      topSearchTerms,
-      topAssets,
-      negativas: neg,
-      negPorCampaña,
-      landingPages: lp,
-      audiencias: aud,
-      geografia: geo
+      totales: { totalCosto, totalImpr, totalClicks, totalConv, totalValor, ctr, cpc, cpl, tasaConv, roas },
+      campañas, trendData, canalesArr, estadoCampañas, alertas,
+      cambios: cambiosOrdenados, grupos, anuncios,
+      countCampañas: campañas.length,
+      countActivas: estadoCampañas.filter(c => c.status === 'ENABLED').length
     };
   }, [adsData]);
 
@@ -797,26 +725,35 @@ function GoogleAdsTab({ adsData, currentClient }) {
     if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`;
     return `$${fmt(Math.round(num))}`;
   };
+  const fmtPct = (n) => `${(Number(n) * 100).toFixed(2)}%`;
+  const fmtDate = (d) => { if (!d) return '—'; return String(d).slice(0, 16).replace('T', ' '); };
 
   const tooltipStyle = {
     contentStyle: { background: 'white', border: '1px solid #ddd6fe', borderRadius: '8px', fontSize: 12 },
     labelStyle: { color: '#5b4bff', fontWeight: 600 }
   };
-
   const PIE_COLORS = [GORUTY.primary, GORUTY.tertiary, GORUTY.accent, GORUTY.secondary, GORUTY.deepPurple, GORUTY.pink];
 
-  // Estilo según QS
-  const qsColor = (qs) => {
-    const n = Number(qs);
-    if (!n || isNaN(n)) return { bg: '#f1f5f9', text: '#64748b', label: 'N/A' };
-    if (n >= 7) return { bg: '#d1fae5', text: '#065f46', label: 'Bueno' };
-    if (n >= 4) return { bg: '#fef3c7', text: '#92400e', label: 'Medio' };
-    return { bg: '#fee2e2', text: '#991b1b', label: 'Bajo' };
+  const statusBadge = (status) => {
+    const map = {
+      'ENABLED': { bg: '#d1fae5', text: '#065f46', label: 'Activa' },
+      'PAUSED': { bg: '#fef3c7', text: '#92400e', label: 'Pausada' },
+      'REMOVED': { bg: '#f1f5f9', text: '#64748b', label: 'Eliminada' }
+    };
+    return map[status] || { bg: '#f1f5f9', text: '#64748b', label: status || '—' };
   };
+
+  const subtabs = [
+    { id: 'overview', label: 'Vista General', icon: TrendingUp },
+    { id: 'campaigns', label: 'Campañas', icon: Megaphone },
+    { id: 'status', label: 'Estado Actual', icon: Activity, badge: computed.alertas.length > 0 ? computed.alertas.length : null },
+    { id: 'changes', label: 'Cambios', icon: History, badge: computed.cambios.length > 0 ? computed.cambios.length : null },
+    { id: 'adgroups', label: 'Grupos', icon: Layers },
+    { id: 'ads', label: 'Anuncios', icon: FileText },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* KPIs principales */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-4 shadow-md">
           <div className="flex items-center gap-2 mb-1">
@@ -824,7 +761,7 @@ function GoogleAdsTab({ adsData, currentClient }) {
             <span className="text-xs font-medium text-white/90">Inversión Total</span>
           </div>
           <div className="text-2xl font-bold text-white">{fmtMoneyShort(computed.totales.totalCosto)}</div>
-          <div className="text-[10px] text-white/80 mt-0.5">{computed.campañas.length} campañas</div>
+          <div className="text-[10px] text-white/80 mt-0.5">{computed.countCampañas} campañas · {computed.countActivas} activas</div>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
           <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#5b4bff20' }}><Eye className="w-4 h-4" style={{ color: GORUTY.primary }} /></div><span className="text-xs font-medium text-slate-500">Impresiones</span></div>
@@ -844,125 +781,127 @@ function GoogleAdsTab({ adsData, currentClient }) {
         </div>
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
           <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#3a2bd420' }}><Target className="w-4 h-4" style={{ color: GORUTY.deepPurple }} /></div><span className="text-xs font-medium text-slate-500">Conversiones</span></div>
-          <div className="text-2xl font-bold text-slate-800">{computed.totales.totalConv.toFixed(0)}</div>
+          <div className="text-2xl font-bold text-slate-800">{computed.totales.totalConv.toFixed(1)}</div>
         </div>
         <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-4 shadow-md">
           <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20"><Award className="w-4 h-4 text-white" /></div><span className="text-xs font-medium text-white/90">CPL</span></div>
           <div className="text-2xl font-bold text-white">{fmtMoneyShort(computed.totales.cpl)}</div>
-          <div className="text-[10px] text-white/80 mt-0.5">Costo por Lead</div>
+          <div className="text-[10px] text-white/80 mt-0.5">Costo por conversión</div>
         </div>
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#ef444420' }}><TrendingUp className="w-4 h-4" style={{ color: GORUTY.danger }} /></div><span className="text-xs font-medium text-slate-500">Tasa Conversión</span></div>
-          <div className="text-2xl font-bold text-slate-800">{computed.totales.tasaConv.toFixed(2)}%</div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#10b98120' }}><TrendingUp className="w-4 h-4" style={{ color: '#10b981' }} /></div><span className="text-xs font-medium text-slate-500">ROAS</span></div>
+          <div className="text-2xl font-bold text-slate-800">{computed.totales.roas.toFixed(2)}x</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">{fmtMoneyShort(computed.totales.totalValor)} valor conv.</div>
         </div>
       </div>
 
-      {/* Tendencia diaria */}
-      {computed.trendData.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800">📈 Tendencia Diaria — Costo, Clicks y Conversiones</h3><p className="text-xs text-slate-500">Evolución del rendimiento día a día</p></div>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={computed.trendData}>
-              <defs>
-                <linearGradient id="adsCostoGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4} /><stop offset="100%" stopColor="#f59e0b" stopOpacity={0.05} /></linearGradient>
-                <linearGradient id="adsClicksGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5b4bff" stopOpacity={0.3} /><stop offset="100%" stopColor="#5b4bff" stopOpacity={0.02} /></linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
-              <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 11 }} />
-              <YAxis yAxisId="right" orientation="right" stroke={GORUTY.deepPurple} style={{ fontSize: 11 }} />
-              <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'Costo' ? fmtMoney(value) : fmt(value)} />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-              <Area yAxisId="left" type="monotone" dataKey="costo" name="Costo" stroke="#f59e0b" fill="url(#adsCostoGrad)" strokeWidth={2.5} />
-              <Area yAxisId="left" type="monotone" dataKey="clicks" name="Clicks" stroke="#5b4bff" fill="url(#adsClicksGrad)" strokeWidth={2} />
-              <Bar yAxisId="right" dataKey="conversiones" name="Conversiones" fill={GORUTY.deepPurple} radius={[4, 4, 0, 0]} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="bg-white rounded-2xl p-2 border border-violet-100 shadow-sm flex flex-wrap gap-1">
+        {subtabs.map(t => {
+          const TIcon = t.icon;
+          const isActive = activeSubtab === t.id;
+          return (
+            <button key={t.id} onClick={() => setActiveSubtab(t.id)}
+              className={`flex-1 min-w-[120px] px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 ${isActive ? 'text-white shadow-md' : 'text-slate-700 hover:bg-violet-50'}`}
+              style={isActive ? { background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` } : {}}>
+              <TIcon className="w-3.5 h-3.5" /><span>{t.label}</span>
+              {t.badge !== null && t.badge !== undefined && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/25 text-white' : 'bg-rose-100 text-rose-700'}`}>{t.badge}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeSubtab === 'overview' && (
+        <>
+          {computed.trendData.length > 0 && (
+            <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+              <div className="mb-4"><h3 className="text-base font-semibold text-slate-800">📈 Tendencia Diaria — Costo, Clicks y Conversiones</h3><p className="text-xs text-slate-500">Evolución del rendimiento día a día</p></div>
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={computed.trendData}>
+                  <defs>
+                    <linearGradient id="adsCostoGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4} /><stop offset="100%" stopColor="#f59e0b" stopOpacity={0.05} /></linearGradient>
+                    <linearGradient id="adsClicksGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5b4bff" stopOpacity={0.3} /><stop offset="100%" stopColor="#5b4bff" stopOpacity={0.02} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                  <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
+                  <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                  <YAxis yAxisId="right" orientation="right" stroke={GORUTY.deepPurple} style={{ fontSize: 11 }} />
+                  <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'Costo' ? fmtMoney(value) : fmt(typeof value === 'number' ? Math.round(value * 100) / 100 : value)} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                  <Area yAxisId="left" type="monotone" dataKey="cost" name="Costo" stroke="#f59e0b" fill="url(#adsCostoGrad)" strokeWidth={2.5} />
+                  <Area yAxisId="left" type="monotone" dataKey="clicks" name="Clicks" stroke="#5b4bff" fill="url(#adsClicksGrad)" strokeWidth={2} />
+                  <Bar yAxisId="right" dataKey="conversions" name="Conversiones" fill={GORUTY.deepPurple} radius={[4, 4, 0, 0]} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+              <div className="mb-4"><h3 className="text-base font-semibold text-slate-800">📊 Inversión y Conversiones por Canal</h3><p className="text-xs text-slate-500">Comparativa de eficiencia</p></div>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={computed.canalesArr}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                  <XAxis dataKey="canal" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                  <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 11 }} />
+                  <YAxis yAxisId="right" orientation="right" stroke={GORUTY.deepPurple} style={{ fontSize: 11 }} />
+                  <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'Costo' ? fmtMoney(value) : (typeof value === 'number' ? value.toFixed(2) : value)} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar yAxisId="left" dataKey="cost" name="Costo" fill={GORUTY.warning} radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="right" dataKey="conversions" name="Conversiones" fill={GORUTY.deepPurple} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+              <div className="mb-4"><h3 className="text-base font-semibold text-slate-800">🥧 Distribución Inversión</h3><p className="text-xs text-slate-500">Por canal</p></div>
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={computed.canalesArr} dataKey="cost" nameKey="canal" cx="50%" cy="50%" outerRadius={75} label={(e) => `${e.canal}\n${fmtMoneyShort(e.cost)}`} style={{ fontSize: 10 }}>
+                    {computed.canalesArr.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip {...tooltipStyle} formatter={(value) => fmtMoney(value)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Performance por Campaña + Pie distribución */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+      {activeSubtab === 'campaigns' && (
+        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Megaphone className="w-4 h-4" style={{ color: GORUTY.primary }} /> Performance por Campaña</h3><p className="text-xs text-slate-500">Detalle de inversión, conversiones y eficiencia</p></div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-slate-500 border-b border-violet-100">
+              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
                 <th className="py-2 px-3 font-semibold">Campaña</th>
                 <th className="py-2 px-3 text-center font-semibold">Canal</th>
-                <th className="py-2 px-3 text-right font-semibold">Inversión</th>
+                <th className="py-2 px-3 text-center font-semibold">Estado</th>
+                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
                 <th className="py-2 px-3 text-right font-semibold">Clicks</th>
                 <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                <th className="py-2 px-3 text-right font-semibold">CPC</th>
+                <th className="py-2 px-3 text-right font-semibold">Costo</th>
                 <th className="py-2 px-3 text-right font-semibold">Conv.</th>
                 <th className="py-2 px-3 text-right font-semibold">CPL</th>
+                <th className="py-2 px-3 text-right font-semibold">Valor</th>
               </tr></thead>
               <tbody>
                 {computed.campañas.map((c, i) => {
-                  const costo = Number(c['Costo']) || 0;
-                  const conv = Number(c['Conversiones']) || 0;
-                  const cpl = conv > 0 ? costo / conv : 0;
+                  const sb = statusBadge(c._meta.status);
                   return (
                     <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 text-slate-700 font-medium">{c['Campaña']}</td>
-                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: c['Canal'] === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: c['Canal'] === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{c['Canal']}</span></td>
-                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(costo)}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(c['Clicks'])}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{c['CTR']}</td>
-                      <td className="py-2 px-3 text-right font-semibold text-slate-700">{Number(c['Conversiones']).toFixed(0)}</td>
-                      <td className="py-2 px-3 text-right font-bold" style={{ color: GORUTY.primary }}>{conv > 0 ? fmtMoneyShort(cpl) : '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800">🥧 Distribución Inversión</h3><p className="text-xs text-slate-500">Por canal</p></div>
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie data={computed.canalesArr} dataKey="costo" nameKey="canal" cx="50%" cy="50%" outerRadius={75} label={(e) => `${e.canal}\n${fmtMoneyShort(e.costo)}`} style={{ fontSize: 10 }}>
-                {computed.canalesArr.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip {...tooltipStyle} formatter={(value) => fmtMoney(value)} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Keywords con Quality Score */}
-      {computed.topKeywords.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Search className="w-4 h-4" style={{ color: GORUTY.primary }} /> Top Keywords</h3><p className="text-xs text-slate-500">Performance + Quality Score (verde ≥7, amarillo 4-6, rojo &lt;4)</p></div>
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">Keyword</th>
-                <th className="py-2 px-3 text-center font-semibold">Match</th>
-                <th className="py-2 px-3 text-center font-semibold">QS</th>
-                <th className="py-2 px-3 text-right font-semibold">Impr.</th>
-                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
-                <th className="py-2 px-3 text-right font-semibold">Costo</th>
-                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
-                <th className="py-2 px-3 text-right font-semibold">CPL</th>
-              </tr></thead>
-              <tbody>
-                {computed.topKeywords.map((k, i) => {
-                  const qs = qsColor(k['QS']);
-                  const conv = Number(k['Conversiones']) || 0;
-                  const costo = Number(k['Costo']) || 0;
-                  const cpl = conv > 0 ? costo / conv : 0;
-                  return (
-                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[200px]" title={k['Keyword']}>{k['Keyword']}</td>
-                      <td className="py-2 px-3 text-center text-[10px] text-slate-500 font-mono">{k['Match Type']}</td>
-                      <td className="py-2 px-3 text-center"><span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: qs.bg, color: qs.text }}>{Number(k['QS']) || '—'}</span></td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Impresiones'])}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(k['Clicks'])}</td>
-                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(costo)}</td>
-                      <td className="py-2 px-3 text-right text-slate-700 font-semibold">{conv.toFixed(0)}</td>
-                      <td className="py-2 px-3 text-right font-bold" style={{ color: conv > 0 ? GORUTY.primary : '#94a3b8' }}>{conv > 0 ? fmtMoneyShort(cpl) : '—'}</td>
+                      <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[280px]" title={c.campaign_name}>{c.campaign_name}</td>
+                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: c._meta.channel_type === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: c._meta.channel_type === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{c._meta.channel_type}</span></td>
+                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: sb.bg, color: sb.text }}>{sb.label}</span></td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(c.impressions)}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(c.clicks)}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmtPct(c.ctr)}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmtMoney(c.avg_cpc)}</td>
+                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(c.cost)}</td>
+                      <td className="py-2 px-3 text-right font-semibold text-slate-700">{c.conversions.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right font-bold" style={{ color: c.conversions > 0 ? GORUTY.primary : '#94a3b8' }}>{c.conversions > 0 ? fmtMoneyShort(c.cost_per_conversion) : '—'}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmtMoneyShort(c.conversions_value)}</td>
                     </tr>
                   );
                 })}
@@ -972,237 +911,219 @@ function GoogleAdsTab({ adsData, currentClient }) {
         </div>
       )}
 
-      {/* Search Terms */}
-      {computed.topSearchTerms.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">🔎 Search Terms — ¿Qué buscan los usuarios?</h3><p className="text-xs text-slate-500">Términos reales que activaron tus anuncios</p></div>
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">Search Term</th>
-                <th className="py-2 px-3 text-center font-semibold">Estado</th>
-                <th className="py-2 px-3 font-semibold">Keyword Origen</th>
-                <th className="py-2 px-3 text-right font-semibold">Impr.</th>
-                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
-                <th className="py-2 px-3 text-right font-semibold">Costo</th>
-                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
-              </tr></thead>
-              <tbody>
-                {computed.topSearchTerms.map((s, i) => {
-                  const conv = Number(s['Conversiones']) || 0;
-                  const costo = Number(s['Costo']) || 0;
-                  return (
-                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 text-slate-700 truncate max-w-[220px]" title={s['Search Term']}>{s['Search Term']}</td>
-                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: s['Status'] === 'ADDED' ? '#d1fae5' : s['Status'] === 'EXCLUDED' ? '#fee2e2' : '#f1f5f9', color: s['Status'] === 'ADDED' ? '#065f46' : s['Status'] === 'EXCLUDED' ? '#991b1b' : '#64748b' }}>{s['Status']}</span></td>
-                      <td className="py-2 px-3 text-slate-500 text-[11px] font-mono truncate max-w-[150px]" title={s['Keyword Origen']}>{s['Keyword Origen']}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(s['Impresiones'])}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(s['Clicks'])}</td>
-                      <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(costo)}</td>
-                      <td className="py-2 px-3 text-right font-semibold" style={{ color: conv > 0 ? '#10b981' : '#94a3b8' }}>{conv.toFixed(0)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Negative Keywords */}
-      {computed.negativas.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Ban className="w-4 h-4 text-rose-500" /> Negative Keywords Activas</h3><p className="text-xs text-slate-500">Palabras excluidas de tus campañas</p></div>
-            <div className="text-right">
-              <div className="text-3xl font-bold" style={{ color: GORUTY.danger }}>{computed.negativas.length}</div>
-              <div className="text-[10px] text-slate-500">activas en total</div>
+      {activeSubtab === 'status' && (
+        <>
+          {computed.alertas.length > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                <h3 className="text-base font-bold text-rose-800">⚠️ Alertas — Campañas activas con problemas de presupuesto</h3>
+              </div>
+              <p className="text-xs text-rose-700 mb-3">Campañas limitadas por presupuesto o que pierden &gt;20% de impression share por presupuesto.</p>
+              <div className="space-y-2">
+                {computed.alertas.map((a, i) => (
+                  <div key={i} className="bg-white rounded-lg p-3 border border-rose-200 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex-1 min-w-[200px]">
+                      <div className="text-sm font-semibold text-slate-800">{a.name}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{a.channel_type} · {a.bidding_strategy}</div>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      {(a.budget_limited === true || a.budget_limited === 'TRUE') && (<span className="px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">Budget limited</span>)}
+                      {(Number(a.budget_lost_is) || 0) > 0.20 && (<span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">IS perdido: {((Number(a.budget_lost_is) || 0) * 100).toFixed(1)}%</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Activity className="w-4 h-4" style={{ color: GORUTY.primary }} /> Estado Actual de Campañas — Snapshot últimos 7 días</h3>
+              <p className="text-xs text-slate-500">{computed.estadoCampañas.length} campañas · {computed.countActivas} activas · {computed.alertas.length} con alertas</p>
+            </div>
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-3 font-semibold">Campaña</th>
+                  <th className="py-2 px-3 text-center font-semibold">Canal</th>
+                  <th className="py-2 px-3 text-center font-semibold">Estado</th>
+                  <th className="py-2 px-3 text-center font-semibold">Bidding</th>
+                  <th className="py-2 px-3 text-center font-semibold">Budget Lim.</th>
+                  <th className="py-2 px-3 text-right font-semibold">IS Perdido</th>
+                  <th className="py-2 px-3 text-right font-semibold">Impr. 7d</th>
+                  <th className="py-2 px-3 text-right font-semibold">Clicks 7d</th>
+                  <th className="py-2 px-3 text-right font-semibold">Costo 7d</th>
+                  <th className="py-2 px-3 text-right font-semibold">Conv. 7d</th>
+                  <th className="py-2 px-3 text-right font-semibold">CTR 7d</th>
+                </tr></thead>
+                <tbody>
+                  {computed.estadoCampañas.map((e, i) => {
+                    const sb = statusBadge(e.status);
+                    const bl = e.budget_limited === true || e.budget_limited === 'TRUE';
+                    const bli = Number(e.budget_lost_is) || 0;
+                    return (
+                      <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                        <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[260px]" title={e.name}>{e.name}</td>
+                        <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: e.channel_type === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: e.channel_type === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{e.channel_type}</span></td>
+                        <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: sb.bg, color: sb.text }}>{sb.label}</span></td>
+                        <td className="py-2 px-3 text-center text-[10px] text-slate-500 font-mono">{e.bidding_strategy}</td>
+                        <td className="py-2 px-3 text-center">{bl ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">SÍ</span> : <span className="text-[10px] text-slate-400">—</span>}</td>
+                        <td className="py-2 px-3 text-right" style={{ color: bli > 0.20 ? GORUTY.danger : (bli > 0.10 ? GORUTY.warning : '#64748b'), fontWeight: bli > 0.10 ? 600 : 400 }}>{(bli * 100).toFixed(1)}%</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmt(e.impressions_7d)}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmt(e.clicks_7d)}</td>
+                        <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(e.cost_7d)}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-slate-700">{Number(e.conversions_7d).toFixed(1)}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{((Number(e.ctr_7d) || 0) * 100).toFixed(2)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-
-          {/* Distribución por campaña */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            {Object.entries(computed.negPorCampaña).map(([campaña, count], i) => (
-              <div key={i} className="bg-rose-50/40 border border-rose-100 rounded-lg p-3 flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-700">{campaña}</span>
-                <span className="text-base font-bold" style={{ color: GORUTY.danger }}>{count}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Tabla detalle */}
-          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">Keyword Negativa</th>
-                <th className="py-2 px-3 font-semibold">Campaña</th>
-                <th className="py-2 px-3 text-center font-semibold">Match Type</th>
-                <th className="py-2 px-3 text-center font-semibold">Estado</th>
-              </tr></thead>
-              <tbody>
-                {computed.negativas.map((n, i) => (
-                  <tr key={i} className="border-b border-violet-50 hover:bg-rose-50/30">
-                    <td className="py-2 px-3 text-slate-700 font-medium">{n['Keyword Negativa']}</td>
-                    <td className="py-2 px-3 text-slate-500 text-xs">{n['Campaña']}</td>
-                    <td className="py-2 px-3 text-center"><span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{n['Match Type']}</span></td>
-                    <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{n['Estado']}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        </>
       )}
 
-      {/* Landing Pages */}
-      {computed.landingPages.length > 0 && (
+      {activeSubtab === 'changes' && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Globe className="w-4 h-4" style={{ color: GORUTY.primary }} /> Landing Pages</h3><p className="text-xs text-slate-500">URLs de destino y su performance</p></div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">URL</th>
-                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
-                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
-                <th className="py-2 px-3 text-right font-semibold">CTR</th>
-                <th className="py-2 px-3 text-right font-semibold">Costo</th>
-                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
-              </tr></thead>
-              <tbody>
-                {computed.landingPages.map((l, i) => {
-                  const urlCorto = String(l['Landing Page'] || '').replace(/^https?:\/\/[^/]+/, '').split('?')[0] || '/';
-                  return (
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><History className="w-4 h-4" style={{ color: GORUTY.primary }} /> Auditoría de Cambios</h3>
+            <p className="text-xs text-slate-500">{computed.cambios.length} cambios registrados</p>
+          </div>
+          {computed.cambios.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <History className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No hay cambios registrados aún</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-3 font-semibold">Fecha</th>
+                  <th className="py-2 px-3 text-center font-semibold">Nivel</th>
+                  <th className="py-2 px-3 font-semibold">Entidad</th>
+                  <th className="py-2 px-3 text-center font-semibold">Tipo Cambio</th>
+                  <th className="py-2 px-3 font-semibold">Antes</th>
+                  <th className="py-2 px-3 font-semibold">Después</th>
+                </tr></thead>
+                <tbody>
+                  {computed.cambios.map((c, i) => (
                     <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 font-mono text-xs text-slate-700 truncate max-w-[300px]" title={l['Landing Page']}>{urlCorto}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(l['Impresiones'])}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(l['Clicks'])}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{l['CTR']}</td>
-                      <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(l['Costo'])}</td>
-                      <td className="py-2 px-3 text-right font-semibold text-slate-700">{Number(l['Conversiones']).toFixed(0)}</td>
+                      <td className="py-2 px-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">{fmtDate(c.timestamp)}</td>
+                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{c.nivel}</span></td>
+                      <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[260px]" title={c.name}>{c.name}</td>
+                      <td className="py-2 px-3 text-center text-[11px] font-semibold text-slate-600">{c.tipo_cambio}</td>
+                      <td className="py-2 px-3 text-rose-600 font-mono text-[11px]">{String(c.valor_anterior || '—')}</td>
+                      <td className="py-2 px-3 text-emerald-600 font-mono text-[11px]">{String(c.valor_nuevo || '—')}</td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Assets */}
-      {computed.topAssets.length > 0 && (
+      {activeSubtab === 'adgroups' && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><ImageIcon className="w-4 h-4" style={{ color: GORUTY.primary }} /> Assets — Performance Creatividades</h3><p className="text-xs text-slate-500">Headlines, descriptions, imágenes y videos con mejor rendimiento</p></div>
-          <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">Asset</th>
-                <th className="py-2 px-3 text-center font-semibold">Tipo</th>
-                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
-                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
-                <th className="py-2 px-3 text-right font-semibold">CTR</th>
-                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
-              </tr></thead>
-              <tbody>
-                {computed.topAssets.map((a, i) => {
-                  const texto = a['Texto'] || a['Asset Name'] || '—';
-                  const tipoColor = a['Field Type'] === 'HEADLINE' ? '#5b4bff20' :
-                                    a['Field Type'] === 'DESCRIPTION' ? '#10b98120' :
-                                    a['Field Type'] === 'LONG_HEADLINE' ? '#f59e0b20' :
-                                    a['Field Type'] === 'YOUTUBE_VIDEO' ? '#ef444420' :
-                                    a['Tipo Asset'] === 'IMAGE' ? '#a594ff30' : '#cbd5e120';
-                  const tipoText = a['Field Type'] === 'HEADLINE' ? GORUTY.primary :
-                                   a['Field Type'] === 'DESCRIPTION' ? '#065f46' :
-                                   a['Field Type'] === 'LONG_HEADLINE' ? '#92400e' :
-                                   a['Field Type'] === 'YOUTUBE_VIDEO' ? '#991b1b' :
-                                   a['Tipo Asset'] === 'IMAGE' ? GORUTY.deepPurple : '#64748b';
-                  return (
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Layers className="w-4 h-4" style={{ color: GORUTY.primary }} /> Grupos de Anuncios</h3>
+            <p className="text-xs text-slate-500">{computed.grupos.length} grupos · ordenados por inversión</p>
+          </div>
+          {computed.grupos.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <Layers className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No hay datos de grupos disponibles</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-3 font-semibold">Grupo</th>
+                  <th className="py-2 px-3 font-semibold">Campaña</th>
+                  <th className="py-2 px-3 text-center font-semibold">Canal</th>
+                  <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
+                  <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                  <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                  <th className="py-2 px-3 text-right font-semibold">CPC</th>
+                  <th className="py-2 px-3 text-right font-semibold">Costo</th>
+                  <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+                  <th className="py-2 px-3 text-right font-semibold">CPL</th>
+                </tr></thead>
+                <tbody>
+                  {computed.grupos.map((g, i) => (
                     <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 text-slate-700 truncate max-w-[280px]" title={texto}>{texto}</td>
-                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: tipoColor, color: tipoText }}>{a['Field Type'] || a['Tipo Asset']}</span></td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Impresiones'])}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Clicks'])}</td>
-                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.primary }}>{a['CTR']}</td>
-                      <td className="py-2 px-3 text-right text-slate-700 font-semibold">{Number(a['Conversiones']).toFixed(1)}</td>
+                      <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[200px]" title={g.ad_group_name}>{g.ad_group_name}</td>
+                      <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[200px]" title={g.campaign_name}>{g.campaign_name}</td>
+                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: g.channel_type === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: g.channel_type === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{g.channel_type}</span></td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(g.impressions)}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmt(g.clicks)}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmtPct(g.ctr)}</td>
+                      <td className="py-2 px-3 text-right text-slate-600">{fmtMoney(g.avg_cpc)}</td>
+                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(g.cost)}</td>
+                      <td className="py-2 px-3 text-right text-slate-700 font-semibold">{g.conversions.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right font-bold" style={{ color: g.conversions > 0 ? GORUTY.primary : '#94a3b8' }}>{g.conversions > 0 ? fmtMoneyShort(g.cost_per_conversion) : '—'}</td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Audiencias (display) */}
-      {computed.audiencias.length > 0 && (
+      {activeSubtab === 'ads' && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Users className="w-4 h-4" style={{ color: GORUTY.primary }} /> Audiencias (Display)</h3><p className="text-xs text-slate-500">Custom Intent, User Lists y User Interests</p></div>
-          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">Tipo</th>
-                <th className="py-2 px-3 font-semibold">Campaña</th>
-                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
-                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
-                <th className="py-2 px-3 text-right font-semibold">CTR</th>
-                <th className="py-2 px-3 text-right font-semibold">Costo</th>
-              </tr></thead>
-              <tbody>
-                {computed.audiencias.map((a, i) => (
-                  <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                    <td className="py-2 px-3"><span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{a['Tipo']}</span></td>
-                    <td className="py-2 px-3 text-slate-700 text-xs">{a['Campaña']}</td>
-                    <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Impresiones'])}</td>
-                    <td className="py-2 px-3 text-right text-slate-600">{fmt(a['Clicks'])}</td>
-                    <td className="py-2 px-3 text-right text-slate-600">{a['CTR']}</td>
-                    <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(a['Costo'])}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><FileText className="w-4 h-4" style={{ color: GORUTY.primary }} /> Anuncios Individuales</h3>
+            <p className="text-xs text-slate-500">{computed.anuncios.length} anuncios · ordenados por impresiones</p>
           </div>
-        </div>
-      )}
-
-      {/* Geografía */}
-      {computed.geografia.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><MapPin className="w-4 h-4" style={{ color: GORUTY.primary }} /> Geografía</h3><p className="text-xs text-slate-500">Performance por tipo de ubicación</p></div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-slate-500 border-b border-violet-100">
-                <th className="py-2 px-3 font-semibold">Campaña</th>
-                <th className="py-2 px-3 font-semibold">Tipo Ubicación</th>
-                <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
-                <th className="py-2 px-3 text-right font-semibold">Clicks</th>
-                <th className="py-2 px-3 text-right font-semibold">Costo</th>
-                <th className="py-2 px-3 text-right font-semibold">Conv.</th>
-              </tr></thead>
-              <tbody>
-                {computed.geografia.map((g, i) => (
-                  <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                    <td className="py-2 px-3 text-slate-700 text-xs">{g['Campaña']}</td>
-                    <td className="py-2 px-3"><span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{g['Location Type']}</span></td>
-                    <td className="py-2 px-3 text-right text-slate-600">{fmt(g['Impresiones'])}</td>
-                    <td className="py-2 px-3 text-right text-slate-600">{fmt(g['Clicks'])}</td>
-                    <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(g['Costo'])}</td>
-                    <td className="py-2 px-3 text-right font-semibold text-slate-700">{Number(g['Conversiones']).toFixed(0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {computed.anuncios.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No hay datos de anuncios disponibles</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-3 font-semibold">Tipo</th>
+                  <th className="py-2 px-3 font-semibold">Final URL</th>
+                  <th className="py-2 px-3 font-semibold">Campaña</th>
+                  <th className="py-2 px-3 font-semibold">Grupo</th>
+                  <th className="py-2 px-3 text-right font-semibold">Impresiones</th>
+                  <th className="py-2 px-3 text-right font-semibold">Clicks</th>
+                  <th className="py-2 px-3 text-right font-semibold">CTR</th>
+                  <th className="py-2 px-3 text-right font-semibold">Costo</th>
+                  <th className="py-2 px-3 text-right font-semibold">Conv.</th>
+                </tr></thead>
+                <tbody>
+                  {computed.anuncios.map((a, i) => {
+                    const urlCorto = String(a.ad_final_urls || '—').replace(/^https?:\/\/[^/]+/, '').split('?')[0] || '/';
+                    return (
+                      <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                        <td className="py-2 px-3"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{a.ad_type}</span></td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-slate-700 truncate max-w-[200px]" title={a.ad_final_urls}>{urlCorto}</td>
+                        <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[180px]" title={a.campaign_name}>{a.campaign_name}</td>
+                        <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[160px]" title={a.ad_group_name}>{a.ad_group_name}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmt(a.impressions)}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmt(a.clicks)}</td>
+                        <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.primary }}>{fmtPct(a.ctr)}</td>
+                        <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(a.cost)}</td>
+                        <td className="py-2 px-3 text-right text-slate-700 font-semibold">{a.conversions.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-
-// =============================================
-// 🎯 FUNNEL DE CONVERSIÓN
-// =============================================
 function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange, trendData }) {
-  const [hoveredStep, setHoveredStep] = useState(null);
-
   const funnelData = useMemo(() => {
     if (!liveData?.eventos) return null;
     const eventosAgregados = {};
@@ -1265,7 +1186,7 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
       return { ...paso, pct, pctAnterior, dropOff, perdidos };
     });
 
-    return { pasos: pasosCalc, total, purchaseValor, modo, comparativa: null };
+    return { pasos: pasosCalc, total, purchaseValor, modo };
   }, [liveData, kpis, dateFilter, dateRange, trendData]);
 
   const fmt = (n) => Number(n).toLocaleString('es-CL');
@@ -1352,9 +1273,6 @@ function ConversionFunnel({ liveData, kpis, dateFilter, currentClient, dateRange
   );
 }
 
-// =============================================
-// 💬 CHAT CONVERSACIONAL
-// =============================================
 function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, trendData }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -1389,16 +1307,16 @@ ${JSON.stringify(dataContext, null, 2)}
 - Detalle DÍA POR DÍA en el array "datosDiarios"
 - Top canales, fuentes, países, ciudades, páginas, dispositivos, eventos${tieneSEO ? `
 - 🔍 DATOS SEO de Google Search Console: totales, quickWins, topKeywords, topPaginas` : ''}${tieneAds ? `
-- 📢 DATOS GOOGLE ADS COMPLETOS en el objeto "googleAds":
-  • totales (inversión, impresiones, clicks, ctr, cpc, conversiones, cpl, tasaConversion)
-  • campañas (con canal, estado, performance)
-  • topKeywords (con QS, match type, costo, conversiones)
-  • searchTerms (búsquedas reales que activaron anuncios)
-  • negativeKeywords (palabras excluidas, total y listado)
-  • landingPages (URLs de destino con performance)
-  • topAssets (creatividades headlines/descriptions/imágenes)
-  • audiencias (custom intent, user lists para display)
-  • geografia (LOCATION_OF_PRESENCE vs AREA_OF_INTEREST)` : ''}
+- 📢 DATOS GOOGLE ADS (estructura v8 — actualizada) en el objeto "googleAds":
+  • totales: inversion, impresiones, clicks, ctr, cpc, conversiones, valorConversiones, cpl, tasaConversion
+  • topCampañas: array con campaña, canal (SEARCH/DISPLAY/PERFORMANCE_MAX/etc), estado, biddingStrategy, métricas y costoConv
+  • estadoCampañas: snapshot 7d con budgetLimited, budgetLostIs, approvalStatus, métricas 7d
+  • alertas: campañas activas con problemas de presupuesto (budgetLimited o IS perdido >20%)
+  • cambiosRecientes: log de auditoría con timestamp, valorAnterior, valorNuevo
+  • topGrupos: ad groups agregados
+  • topAnuncios: anuncios individuales con adType y finalUrl
+
+⚠️ NOTA: La estructura de Google Ads cambió. Ya NO hay datos de keywords con QS, search terms, negative keywords, landing pages individuales, assets ni audiencias.` : ''}
 
 INSTRUCCIONES:
 - Responde SIEMPRE en español
@@ -1406,11 +1324,12 @@ INSTRUCCIONES:
 - Usa formato Markdown
 - Cita datos específicos (números reales del JSON)
 - NO inventes datos
-- Sé directo y práctico${tieneAds ? `
-- Para preguntas Google Ads, prioriza eficiencia (CPL bajo) sobre volumen, sugiere keywords negativas viendo searchTerms con 0 conv, alerta sobre Quality Scores bajos (<4) y assets con bajo CTR
-- Distingue entre Display y Search por canal: típicamente Search es más eficiente que Display en CPL` : ''}${tieneSEO ? `
-- Para preguntas SEO, prioriza Quick Wins, analiza caídas con causa probable
-- Distingue entre "tráfico SEO" (orgánico) y "tráfico Ads" (pagado) y "tráfico GA4" (todos)` : ''}`;
+- Sé directo y práctico
+- Distingue entre datos confirmados y estimaciones — marca [REQUIERE VALIDACIÓN] cuando la conclusión no esté respaldada por datos validados${tieneAds ? `
+- Para preguntas Google Ads, prioriza eficiencia (CPL bajo, ROAS alto) sobre volumen
+- Alerta proactivamente sobre campañas con budgetLimited o budgetLostIs alto (>20%)
+- Si te preguntan por cambios recientes, usa cambiosRecientes (audit log)` : ''}${tieneSEO ? `
+- Para preguntas SEO, prioriza Quick Wins, analiza caídas con causa probable` : ''}`;
 
     const apiMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
 
@@ -1495,10 +1414,6 @@ INSTRUCCIONES:
     </div>
   );
 }
-
-// =============================================
-// 🧩 COMPONENTES UI REUTILIZABLES (fuera de Dashboard para evitar remounts)
-// =============================================
 const KpiCard = ({ icon: Icon, label, value, accentColor = GORUTY.primary, trend }) => (
   <div className="bg-white border border-violet-100 rounded-xl p-4 hover:border-violet-300 hover:shadow-md hover:shadow-violet-100 transition-all">
     <div className="flex items-start justify-between mb-2">
@@ -1596,16 +1511,8 @@ function Dashboard({ session, onLogout }) {
   useEffect(() => { if (Object.keys(clientCache).length === 0) handleRefresh(); /* eslint-disable-next-line */ }, []);
 
   const [sections, setSections] = useState({
-    aiChat: false,
-    funnel: false,
-    seo: false,
-    paidMedia: false,
-    acquisition: false,
-    audience: false,
-    behavior: false,
-    engagement: false,
-    events: false,
-    advanced: false,
+    aiChat: false, funnel: false, seo: false, paidMedia: false,
+    acquisition: false, audience: false, behavior: false, engagement: false, events: false, advanced: false,
   });
 
   const toggleSection = useCallback((key) => setSections(prev => ({ ...prev, [key]: !prev[key] })), []);
@@ -1808,7 +1715,6 @@ function Dashboard({ session, onLogout }) {
   const fmt = (n) => Number(n).toLocaleString('es-CL');
   const fmtTime = (s) => `${Math.floor(s / 60)}m ${s % 60}s`;
   const fmtMoney = (n) => `$${(n / 1000000).toFixed(1)}M`;
-
   const tooltipStyle = { contentStyle: { backgroundColor: '#fff', border: `1px solid ${GORUTY.light}`, borderRadius: '8px', color: '#1e293b', boxShadow: '0 10px 15px -3px rgba(91, 75, 255, 0.1)' }, labelStyle: { color: '#64748b', fontWeight: 600 } };
 
   const hasDataForActiveClient = !!liveData;
@@ -1921,7 +1827,6 @@ function Dashboard({ session, onLogout }) {
               <div className="mt-3 text-xs text-slate-500">Mostrando <span className="font-semibold" style={{ color: GORUTY.primary }}>{daysCount} días</span> de datos{dateRange !== 'all' && <span className="ml-2 text-violet-600">· Filtro aplicado a todas las secciones</span>}</div>
             </div>
 
-            {/* 💬 CHAT CON CLAUDE — POSICIONADO ARRIBA DE LOS KPIs (solo admin) */}
             {isAdmin && (
               <div className="mb-6">
                 <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
@@ -1929,7 +1834,6 @@ function Dashboard({ session, onLogout }) {
               </div>
             )}
 
-            {/* 📊 KPIs PRINCIPALES — primer grid (6 cards) */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
               <KpiCard icon={Users} label="Usuarios Activos" value={fmt(kpis.usuarios)} accentColor={GORUTY.primary} trend={8.4} />
               <KpiCard icon={Users} label="Usuarios Nuevos" value={fmt(kpis.usuariosNuevos)} accentColor={GORUTY.secondary} trend={6.2} />
@@ -1988,7 +1892,6 @@ function Dashboard({ session, onLogout }) {
               </div>
             )}
 
-            {/* 🆕 PAID MEDIA — Google Ads / Meta / LinkedIn */}
             <SectionHeader title="Paid Media" subtitle="Performance de campañas pagadas — Google Ads, Meta, LinkedIn" icon={Megaphone} sectionKey="paidMedia" badge={liveData?.googleAds?.disponible ? '📢 Ads' : '🔜 Pronto'} sections={sections} toggleSection={toggleSection} />
             {sections.paidMedia && (
               <div className="mb-6">
@@ -1996,7 +1899,7 @@ function Dashboard({ session, onLogout }) {
               </div>
             )}
 
-            <SectionHeader title="SEO Orgánico" subtitle="Datos de Google Search Console — keywords, posiciones y oportunidades" icon={Search} sectionKey="seo" badge={liveData?.seo?.disponible ? '🔍 GSC' : '🔜 Pronto'} sections={sections} toggleSection={toggleSection} />
+            <SectionHeader title="SEO Orgánico" subtitle="Datos de Google Search Console — keywords, posiciones y oportunidades" icon={Globe} sectionKey="seo" badge={liveData?.seo?.disponible ? '🔍 GSC' : '🔜 Pronto'} sections={sections} toggleSection={toggleSection} />
             {sections.seo && (
               <div className="mb-6">
                 <SEOSection liveData={liveData} currentClient={currentClient} />
