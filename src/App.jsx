@@ -67,6 +67,196 @@ function aggregateAdsData(rows, groupByField) {
   }));
 }
 
+// 🆕 v9 — HELPER: Construye serie diaria filtrada por una dimensión específica
+function buildTimeSeriesByValue(rows, filterField, filterValue) {
+  const filtered = rows.filter(r => r[filterField] === filterValue);
+  const dayMap = {};
+  filtered.forEach(r => {
+    const fecha = String(r.date || '').slice(0, 10);
+    if (!fecha) return;
+    if (!dayMap[fecha]) dayMap[fecha] = { fechaCompleta: fecha, fecha: fecha.slice(5), cost: 0, clicks: 0, impressions: 0, conversions: 0, conversions_value: 0 };
+    dayMap[fecha].cost += Number(r.cost) || 0;
+    dayMap[fecha].clicks += Number(r.clicks) || 0;
+    dayMap[fecha].impressions += Number(r.impressions) || 0;
+    dayMap[fecha].conversions += Number(r.conversions) || 0;
+    dayMap[fecha].conversions_value += Number(r.conversions_value) || 0;
+  });
+  return Object.values(dayMap)
+    .map(d => ({
+      ...d,
+      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+      cpl: d.conversions > 0 ? d.cost / d.conversions : 0,
+      roas: d.cost > 0 ? d.conversions_value / d.cost : 0
+    }))
+    .sort((a, b) => a.fechaCompleta.localeCompare(b.fechaCompleta));
+}
+
+// 🆕 v9 — Componente: gráfico expandible de evolución temporal con toggle de métricas
+function RowExpandChart({ timeSeries, label }) {
+  const [vista, setVista] = useState('costo_conv');
+
+  if (!timeSeries || timeSeries.length === 0) {
+    return (
+      <div className="text-center py-6 text-slate-400 text-xs">
+        No hay datos diarios para esta selección.
+      </div>
+    );
+  }
+
+  const fmtMoney = (n) => {
+    const num = Number(n) || 0;
+    if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
+    if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`;
+    return `$${Math.round(num).toLocaleString('es-CL')}`;
+  };
+
+  const tooltipStyle = {
+    contentStyle: { background: 'white', border: '1px solid #ddd6fe', borderRadius: '8px', fontSize: 12 },
+    labelStyle: { color: '#5b4bff', fontWeight: 600 }
+  };
+
+  const vistas = [
+    { id: 'costo_conv', label: 'Costo + Conv.' },
+    { id: 'clicks_ctr', label: 'Clicks + CTR' },
+    { id: 'cpl_roas', label: 'CPL + ROAS' },
+    { id: 'all', label: 'Las 4 (resumen)' },
+  ];
+
+  const renderChart = () => {
+    if (vista === 'costo_conv') {
+      return (
+        <ComposedChart data={timeSeries}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+          <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
+          <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 10 }} tickFormatter={fmtMoney} />
+          <YAxis yAxisId="right" orientation="right" stroke={GORUTY.deepPurple} style={{ fontSize: 10 }} />
+          <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'Costo' ? fmtMoney(value) : Number(value).toFixed(2)} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Area yAxisId="left" type="monotone" dataKey="cost" name="Costo" stroke="#f59e0b" fill="#f59e0b40" strokeWidth={2} />
+          <Bar yAxisId="right" dataKey="conversions" name="Conversiones" fill={GORUTY.deepPurple} radius={[3, 3, 0, 0]} />
+        </ComposedChart>
+      );
+    }
+    if (vista === 'clicks_ctr') {
+      return (
+        <ComposedChart data={timeSeries}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+          <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
+          <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 10 }} />
+          <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 10 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
+          <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'CTR' ? `${Number(value).toFixed(2)}%` : Number(value).toLocaleString('es-CL')} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Area yAxisId="left" type="monotone" dataKey="clicks" name="Clicks" stroke={GORUTY.primary} fill={`${GORUTY.primary}30`} strokeWidth={2} />
+          <Line yAxisId="right" type="monotone" dataKey="ctr" name="CTR" stroke="#10b981" strokeWidth={2.5} dot={false} />
+        </ComposedChart>
+      );
+    }
+    if (vista === 'cpl_roas') {
+      return (
+        <ComposedChart data={timeSeries}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+          <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 10 }} />
+          <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 10 }} tickFormatter={fmtMoney} />
+          <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 10 }} tickFormatter={(v) => `${v.toFixed(1)}x`} />
+          <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'CPL' ? fmtMoney(value) : `${Number(value).toFixed(2)}x`} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar yAxisId="left" dataKey="cpl" name="CPL" fill={GORUTY.warning} radius={[3, 3, 0, 0]} />
+          <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="#10b981" strokeWidth={2.5} dot={false} />
+        </ComposedChart>
+      );
+    }
+    // 'all' — mostrar las 4 métricas en mini grid
+    return null;
+  };
+
+  if (vista === 'all') {
+    return (
+      <div>
+        <div className="flex flex-wrap gap-1 mb-3">
+          {vistas.map(v => (
+            <button key={v.id} onClick={() => setVista(v.id)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition ${vista === v.id ? 'text-white shadow-sm' : 'text-slate-600 bg-violet-50 hover:bg-violet-100'}`}
+              style={vista === v.id ? { background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` } : {}}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <div className="text-[11px] font-semibold text-slate-500 mb-1">💰 Costo + Conversiones</div>
+            <ResponsiveContainer width="100%" height={170}>
+              <ComposedChart data={timeSeries}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 9 }} />
+                <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 9 }} tickFormatter={fmtMoney} />
+                <YAxis yAxisId="right" orientation="right" stroke={GORUTY.deepPurple} style={{ fontSize: 9 }} />
+                <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'Costo' ? fmtMoney(value) : Number(value).toFixed(2)} />
+                <Area yAxisId="left" type="monotone" dataKey="cost" name="Costo" stroke="#f59e0b" fill="#f59e0b40" strokeWidth={2} />
+                <Bar yAxisId="right" dataKey="conversions" name="Conv." fill={GORUTY.deepPurple} radius={[2, 2, 0, 0]} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div>
+            <div className="text-[11px] font-semibold text-slate-500 mb-1">🖱️ Clicks + CTR</div>
+            <ResponsiveContainer width="100%" height={170}>
+              <ComposedChart data={timeSeries}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 9 }} />
+                <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: 9 }} />
+                <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 9 }} tickFormatter={(v) => `${v.toFixed(0)}%`} />
+                <Tooltip {...tooltipStyle} formatter={(value, name) => name === 'CTR' ? `${Number(value).toFixed(2)}%` : Number(value).toLocaleString('es-CL')} />
+                <Area yAxisId="left" type="monotone" dataKey="clicks" name="Clicks" stroke={GORUTY.primary} fill={`${GORUTY.primary}30`} strokeWidth={2} />
+                <Line yAxisId="right" type="monotone" dataKey="ctr" name="CTR" stroke="#10b981" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div>
+            <div className="text-[11px] font-semibold text-slate-500 mb-1">🎯 CPL diario</div>
+            <ResponsiveContainer width="100%" height={170}>
+              <BarChart data={timeSeries}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 9 }} />
+                <YAxis stroke="#94a3b8" style={{ fontSize: 9 }} tickFormatter={fmtMoney} />
+                <Tooltip {...tooltipStyle} formatter={(value) => fmtMoney(value)} />
+                <Bar dataKey="cpl" name="CPL" fill={GORUTY.warning} radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div>
+            <div className="text-[11px] font-semibold text-slate-500 mb-1">📈 ROAS</div>
+            <ResponsiveContainer width="100%" height={170}>
+              <LineChart data={timeSeries}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                <XAxis dataKey="fecha" stroke="#94a3b8" style={{ fontSize: 9 }} />
+                <YAxis stroke="#94a3b8" style={{ fontSize: 9 }} tickFormatter={(v) => `${v.toFixed(1)}x`} />
+                <Tooltip {...tooltipStyle} formatter={(value) => `${Number(value).toFixed(2)}x`} />
+                <Line type="monotone" dataKey="roas" name="ROAS" stroke="#10b981" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1 mb-3">
+        {vistas.map(v => (
+          <button key={v.id} onClick={() => setVista(v.id)}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition ${vista === v.id ? 'text-white shadow-sm' : 'text-slate-600 bg-violet-50 hover:bg-violet-100'}`}
+            style={vista === v.id ? { background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` } : {}}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+      <ResponsiveContainer width="100%" height={240}>
+        {renderChart()}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function buildDataContext(liveData, kpis, currentClient, dateRange, daysCount, trendData) {
   return {
     cliente: currentClient?.nombre,
@@ -388,8 +578,9 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-function SEOSection({ liveData, currentClient }) {
+function SEOSection({ liveData, currentClient, dateFilter, dateRange }) {
   const seoData = liveData?.seo;
+  const filtroActivo = dateRange && dateRange !== 'all';
 
   const seoComputed = useMemo(() => {
     if (!seoData?.disponible) return null;
@@ -397,12 +588,21 @@ function SEOSection({ liveData, currentClient }) {
     const paginas = seoData.paginasSEO || [];
     const tendencia = seoData.tendenciaSEO || [];
     const movimientos = seoData.posicionesSEO || [];
-    const totalClics = keywords.reduce((s, k) => s + (Number(k['Clics']) || 0), 0);
-    const totalImpresiones = keywords.reduce((s, k) => s + (Number(k['Impresiones']) || 0), 0);
-    const ctrPromedio = totalImpresiones > 0 ? ((totalClics / totalImpresiones) * 100) : 0;
-    const posicionPromedio = keywords.length > 0
-      ? (keywords.reduce((s, k) => s + (Number(k['Posición Promedio']) || 0), 0) / keywords.length)
+
+    // 🆕 v9 — Tendencia filtrada por fecha (Tendencia_Diaria_GSC tiene fecha)
+    const tendenciaFiltrada = dateFilter
+      ? tendencia.filter(t => dateFilter(t['Fecha']))
+      : tendencia;
+
+    // KPIs derivados de la tendencia (sí filtrables)
+    const totalClicsTrend = tendenciaFiltrada.reduce((s, t) => s + (Number(t['Clics']) || 0), 0);
+    const totalImpresionesTrend = tendenciaFiltrada.reduce((s, t) => s + (Number(t['Impresiones']) || 0), 0);
+    const ctrPromedioTrend = totalImpresionesTrend > 0 ? ((totalClicsTrend / totalImpresionesTrend) * 100) : 0;
+    const posicionPromedioTrend = tendenciaFiltrada.length > 0
+      ? (tendenciaFiltrada.reduce((s, t) => s + (Number(t['Posición Promedio']) || 0), 0) / tendenciaFiltrada.length)
       : 0;
+
+    // Tablas: SIN filtro (no tienen fecha por fila — son agregados pre-calculados del sheet)
     const quickWins = keywords.filter(k => {
       const pos = Number(k['Posición Promedio']) || 999;
       const impr = Number(k['Impresiones']) || 0;
@@ -412,19 +612,25 @@ function SEOSection({ liveData, currentClient }) {
     const subidas = movimientos.filter(m => (Number(m['Cambio']) || 0) > 0).sort((a, b) => (Number(b['Cambio']) || 0) - (Number(a['Cambio']) || 0)).slice(0, 15);
     const caidas = movimientos.filter(m => (Number(m['Cambio']) || 0) < 0).sort((a, b) => (Number(a['Cambio']) || 0) - (Number(b['Cambio']) || 0)).slice(0, 15);
     const topPaginas = [...paginas].sort((a, b) => (Number(b['Clics']) || 0) - (Number(a['Clics']) || 0)).slice(0, 20);
-    const trendData = tendencia.slice(-40).map(t => ({
+
+    const trendData = tendenciaFiltrada.map(t => ({
       fecha: String(t['Fecha'] || '').slice(5, 10),
       fechaCompleta: String(t['Fecha'] || '').slice(0, 10),
       clics: Number(t['Clics']) || 0,
       impresiones: Number(t['Impresiones']) || 0,
       posicion: Number(t['Posición Promedio']) || 0
-    }));
+    })).slice(-40);
+
     return {
-      totalClics, totalImpresiones, ctrPromedio, posicionPromedio,
+      totalClics: totalClicsTrend,
+      totalImpresiones: totalImpresionesTrend,
+      ctrPromedio: ctrPromedioTrend,
+      posicionPromedio: posicionPromedioTrend,
       totalKeywords: keywords.length,
-      quickWins, topKeywords, subidas, caidas, topPaginas, trendData
+      quickWins, topKeywords, subidas, caidas, topPaginas, trendData,
+      diasFiltrados: tendenciaFiltrada.length
     };
-  }, [seoData]);
+  }, [seoData, dateFilter, dateRange]);
 
   if (!seoData?.disponible) {
     return (
@@ -447,6 +653,14 @@ function SEOSection({ liveData, currentClient }) {
 
   return (
     <div className="space-y-6">
+      {filtroActivo && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-900">
+            <strong>Filtro de fecha activo ({seoComputed.diasFiltrados} días):</strong> los KPIs y la tendencia diaria reflejan el período filtrado. Las tablas (Quick Wins, Top Keywords, Movimientos de Posición y URLs) son <strong>agregados pre-calculados de Search Console</strong> y no tienen fecha por fila — muestran el período completo del sheet.
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
           <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#5b4bff20' }}><span className="text-base">🔍</span></div><span className="text-xs font-medium text-slate-500">Clics SEO</span></div>
@@ -498,7 +712,7 @@ function SEOSection({ liveData, currentClient }) {
 
       {seoComputed.quickWins.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4"><div><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>⚡</span> Quick Wins — Oportunidades Top</h3><p className="text-xs text-slate-500">Keywords en posición 5–15 con muchas impresiones. Atacarlas = subida fuerte de tráfico.</p></div></div>
+          <div className="flex items-center justify-between mb-4"><div><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>⚡</span> Quick Wins — Oportunidades Top {filtroActivo && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">📅 Período completo</span>}</h3><p className="text-xs text-slate-500">Keywords en posición 5–15 con muchas impresiones. Atacarlas = subida fuerte de tráfico.</p></div></div>
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">Keyword</th><th className="py-2 px-3 text-right font-semibold">Clics</th><th className="py-2 px-3 text-right font-semibold">Impresiones</th><th className="py-2 px-3 text-right font-semibold">CTR</th><th className="py-2 px-3 text-right font-semibold">Posición</th></tr></thead>
@@ -520,7 +734,7 @@ function SEOSection({ liveData, currentClient }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>🏆</span> Top 25 Keywords</h3><p className="text-xs text-slate-500">Ordenadas por clics</p></div>
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>🏆</span> Top 25 Keywords {filtroActivo && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">📅 Período completo</span>}</h3><p className="text-xs text-slate-500">Ordenadas por clics</p></div>
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">Keyword</th><th className="py-2 px-3 text-right font-semibold">Clics</th><th className="py-2 px-3 text-right font-semibold">Pos.</th></tr></thead>
@@ -538,7 +752,7 @@ function SEOSection({ liveData, currentClient }) {
         </div>
 
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>📈</span> Movimientos de Posición</h3><p className="text-xs text-slate-500">Subidas y caídas más relevantes</p></div>
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>📈</span> Movimientos de Posición {filtroActivo && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">📅 Período completo</span>}</h3><p className="text-xs text-slate-500">Subidas y caídas más relevantes</p></div>
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {seoComputed.subidas.length > 0 && (
               <div>
@@ -572,7 +786,7 @@ function SEOSection({ liveData, currentClient }) {
 
       {seoComputed.topPaginas.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>🌐</span> Top URLs por Tráfico SEO</h3><p className="text-xs text-slate-500">Páginas con más tráfico orgánico</p></div>
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><span>🌐</span> Top URLs por Tráfico SEO {filtroActivo && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">📅 Período completo</span>}</h3><p className="text-xs text-slate-500">Páginas con más tráfico orgánico</p></div>
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100"><th className="py-2 px-3 font-semibold">URL</th><th className="py-2 px-3 text-right font-semibold">Clics</th><th className="py-2 px-3 text-right font-semibold">Impr.</th><th className="py-2 px-3 text-right font-semibold">CTR</th><th className="py-2 px-3 text-right font-semibold">Pos.</th></tr></thead>
@@ -598,7 +812,7 @@ function SEOSection({ liveData, currentClient }) {
   );
 }
 
-function PaidMediaSection({ liveData, currentClient }) {
+function PaidMediaSection({ liveData, currentClient, dateFilter, dateRange }) {
   const [activePlatform, setActivePlatform] = useState('googleAds');
   const tieneGoogleAds = liveData?.googleAds?.disponible;
 
@@ -637,20 +851,31 @@ function PaidMediaSection({ liveData, currentClient }) {
         ))}
       </div>
       {activePlatform === 'googleAds' && tieneGoogleAds && (
-        <GoogleAdsTab adsData={liveData.googleAds} currentClient={currentClient} />
+        <GoogleAdsTab adsData={liveData.googleAds} currentClient={currentClient} dateFilter={dateFilter} dateRange={dateRange} />
       )}
     </div>
   );
 }
-function GoogleAdsTab({ adsData, currentClient }) {
+function GoogleAdsTab({ adsData, currentClient, dateFilter, dateRange }) {
   const [activeSubtab, setActiveSubtab] = useState('overview');
+  // 🆕 v9 — Fila expandida: { table: 'campaigns'|'adgroups'|'ads', key: 'value' }
+  const [expandedRow, setExpandedRow] = useState(null);
+
+  const toggleRow = (table, key) => {
+    setExpandedRow(prev => (prev?.table === table && prev?.key === key) ? null : { table, key });
+  };
 
   const computed = useMemo(() => {
-    const datos = adsData.datos || [];
+    // 🆕 v9 — Filtrar por fecha (Datos, Datos_Grupos, Datos_Anuncios tienen columna 'date')
+    // 'estado' y 'cambios' NO se filtran (estado=snapshot 7d, cambios=audit log con su propio timestamp)
+    const datosRaw = adsData.datos || [];
+    const datosGruposRaw = adsData.datosGrupos || [];
+    const datosAnunciosRaw = adsData.datosAnuncios || [];
+    const datos = dateFilter ? datosRaw.filter(r => dateFilter(r.date)) : datosRaw;
+    const datosGrupos = dateFilter ? datosGruposRaw.filter(r => dateFilter(r.date)) : datosGruposRaw;
+    const datosAnuncios = dateFilter ? datosAnunciosRaw.filter(r => dateFilter(r.date)) : datosAnunciosRaw;
     const cambios = adsData.cambios || [];
     const estado = adsData.estado || [];
-    const datosGrupos = adsData.datosGrupos || [];
-    const datosAnuncios = adsData.datosAnuncios || [];
 
     const totalCosto = datos.reduce((s, r) => s + (Number(r.cost) || 0), 0);
     const totalImpr = datos.reduce((s, r) => s + (Number(r.impressions) || 0), 0);
@@ -712,10 +937,12 @@ function GoogleAdsTab({ adsData, currentClient }) {
       totales: { totalCosto, totalImpr, totalClicks, totalConv, totalValor, ctr, cpc, cpl, tasaConv, roas },
       campañas, trendData, canalesArr, estadoCampañas, alertas,
       cambios: cambiosOrdenados, grupos, anuncios,
+      // 🆕 v9 — datos crudos filtrados para construir series por fila expandida
+      datosFiltered: datos, datosGruposFiltered: datosGrupos, datosAnunciosFiltered: datosAnuncios,
       countCampañas: campañas.length,
       countActivas: estadoCampañas.filter(c => c.status === 'ENABLED').length
     };
-  }, [adsData]);
+  }, [adsData, dateFilter]);
 
   const fmt = (n) => Number(n).toLocaleString('es-CL');
   const fmtMoney = (n) => `$${fmt(Math.round(Number(n) || 0))}`;
@@ -752,8 +979,18 @@ function GoogleAdsTab({ adsData, currentClient }) {
     { id: 'ads', label: 'Anuncios', icon: FileText },
   ];
 
+  const filtroActivo = dateRange && dateRange !== 'all';
+
   return (
     <div className="space-y-6">
+      {filtroActivo && (
+        <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-violet-900">
+            <strong>Filtro de fecha activo:</strong> los KPIs, tendencia, campañas, grupos y anuncios reflejan el período filtrado. Las pestañas <strong>Estado Actual</strong> (snapshot 7d de Google Ads) y <strong>Cambios</strong> (log de auditoría) mantienen su período propio.
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-4 shadow-md">
           <div className="flex items-center gap-2 mb-1">
@@ -870,10 +1107,11 @@ function GoogleAdsTab({ adsData, currentClient }) {
 
       {activeSubtab === 'campaigns' && (
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Megaphone className="w-4 h-4" style={{ color: GORUTY.primary }} /> Performance por Campaña</h3><p className="text-xs text-slate-500">Detalle de inversión, conversiones y eficiencia</p></div>
+          <div className="mb-4"><h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Megaphone className="w-4 h-4" style={{ color: GORUTY.primary }} /> Performance por Campaña</h3><p className="text-xs text-slate-500">Click en una fila para ver evolución diaria</p></div>
           <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                <th className="py-2 px-2 font-semibold w-6"></th>
                 <th className="py-2 px-3 font-semibold">Campaña</th>
                 <th className="py-2 px-3 text-center font-semibold">Canal</th>
                 <th className="py-2 px-3 text-center font-semibold">Estado</th>
@@ -889,20 +1127,32 @@ function GoogleAdsTab({ adsData, currentClient }) {
               <tbody>
                 {computed.campañas.map((c, i) => {
                   const sb = statusBadge(c._meta.status);
+                  const isExpanded = expandedRow?.table === 'campaigns' && expandedRow?.key === c.campaign_name;
                   return (
-                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[280px]" title={c.campaign_name}>{c.campaign_name}</td>
-                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: c._meta.channel_type === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: c._meta.channel_type === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{c._meta.channel_type}</span></td>
-                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: sb.bg, color: sb.text }}>{sb.label}</span></td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(c.impressions)}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(c.clicks)}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmtPct(c.ctr)}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmtMoney(c.avg_cpc)}</td>
-                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(c.cost)}</td>
-                      <td className="py-2 px-3 text-right font-semibold text-slate-700">{c.conversions.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right font-bold" style={{ color: c.conversions > 0 ? GORUTY.primary : '#94a3b8' }}>{c.conversions > 0 ? fmtMoneyShort(c.cost_per_conversion) : '—'}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmtMoneyShort(c.conversions_value)}</td>
-                    </tr>
+                    <React.Fragment key={i}>
+                      <tr onClick={() => toggleRow('campaigns', c.campaign_name)} className={`border-b border-violet-50 cursor-pointer transition ${isExpanded ? 'bg-violet-50' : 'hover:bg-violet-50/50'}`}>
+                        <td className="py-2 px-2 text-center">{isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-violet-500 inline" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 inline" />}</td>
+                        <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[280px]" title={c.campaign_name}>{c.campaign_name}</td>
+                        <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: c._meta.channel_type === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: c._meta.channel_type === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{c._meta.channel_type}</span></td>
+                        <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: sb.bg, color: sb.text }}>{sb.label}</span></td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmt(c.impressions)}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmt(c.clicks)}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmtPct(c.ctr)}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmtMoney(c.avg_cpc)}</td>
+                        <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(c.cost)}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-slate-700">{c.conversions.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right font-bold" style={{ color: c.conversions > 0 ? GORUTY.primary : '#94a3b8' }}>{c.conversions > 0 ? fmtMoneyShort(c.cost_per_conversion) : '—'}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmtMoneyShort(c.conversions_value)}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={12} className="bg-violet-50/30 border-b border-violet-100 p-4">
+                            <div className="text-xs font-semibold text-slate-700 mb-2">📊 Evolución diaria — {c.campaign_name}</div>
+                            <RowExpandChart timeSeries={buildTimeSeriesByValue(computed.datosFiltered, 'campaign_name', c.campaign_name)} label={c.campaign_name} />
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -1028,7 +1278,7 @@ function GoogleAdsTab({ adsData, currentClient }) {
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="mb-4">
             <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Layers className="w-4 h-4" style={{ color: GORUTY.primary }} /> Grupos de Anuncios</h3>
-            <p className="text-xs text-slate-500">{computed.grupos.length} grupos · ordenados por inversión</p>
+            <p className="text-xs text-slate-500">{computed.grupos.length} grupos · click en una fila para ver evolución diaria</p>
           </div>
           {computed.grupos.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
@@ -1039,6 +1289,7 @@ function GoogleAdsTab({ adsData, currentClient }) {
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-2 font-semibold w-6"></th>
                   <th className="py-2 px-3 font-semibold">Grupo</th>
                   <th className="py-2 px-3 font-semibold">Campaña</th>
                   <th className="py-2 px-3 text-center font-semibold">Canal</th>
@@ -1051,20 +1302,34 @@ function GoogleAdsTab({ adsData, currentClient }) {
                   <th className="py-2 px-3 text-right font-semibold">CPL</th>
                 </tr></thead>
                 <tbody>
-                  {computed.grupos.map((g, i) => (
-                    <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                      <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[200px]" title={g.ad_group_name}>{g.ad_group_name}</td>
-                      <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[200px]" title={g.campaign_name}>{g.campaign_name}</td>
-                      <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: g.channel_type === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: g.channel_type === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{g.channel_type}</span></td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(g.impressions)}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmt(g.clicks)}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmtPct(g.ctr)}</td>
-                      <td className="py-2 px-3 text-right text-slate-600">{fmtMoney(g.avg_cpc)}</td>
-                      <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(g.cost)}</td>
-                      <td className="py-2 px-3 text-right text-slate-700 font-semibold">{g.conversions.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right font-bold" style={{ color: g.conversions > 0 ? GORUTY.primary : '#94a3b8' }}>{g.conversions > 0 ? fmtMoneyShort(g.cost_per_conversion) : '—'}</td>
-                    </tr>
-                  ))}
+                  {computed.grupos.map((g, i) => {
+                    const isExpanded = expandedRow?.table === 'adgroups' && expandedRow?.key === g.ad_group_id;
+                    return (
+                      <React.Fragment key={i}>
+                        <tr onClick={() => toggleRow('adgroups', g.ad_group_id)} className={`border-b border-violet-50 cursor-pointer transition ${isExpanded ? 'bg-violet-50' : 'hover:bg-violet-50/50'}`}>
+                          <td className="py-2 px-2 text-center">{isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-violet-500 inline" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 inline" />}</td>
+                          <td className="py-2 px-3 text-slate-700 font-medium truncate max-w-[200px]" title={g.ad_group_name}>{g.ad_group_name}</td>
+                          <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[200px]" title={g.campaign_name}>{g.campaign_name}</td>
+                          <td className="py-2 px-3 text-center"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: g.channel_type === 'SEARCH' ? '#5b4bff20' : '#a594ff30', color: g.channel_type === 'SEARCH' ? GORUTY.primary : GORUTY.deepPurple }}>{g.channel_type}</span></td>
+                          <td className="py-2 px-3 text-right text-slate-600">{fmt(g.impressions)}</td>
+                          <td className="py-2 px-3 text-right text-slate-600">{fmt(g.clicks)}</td>
+                          <td className="py-2 px-3 text-right text-slate-600">{fmtPct(g.ctr)}</td>
+                          <td className="py-2 px-3 text-right text-slate-600">{fmtMoney(g.avg_cpc)}</td>
+                          <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.warning }}>{fmtMoneyShort(g.cost)}</td>
+                          <td className="py-2 px-3 text-right text-slate-700 font-semibold">{g.conversions.toFixed(2)}</td>
+                          <td className="py-2 px-3 text-right font-bold" style={{ color: g.conversions > 0 ? GORUTY.primary : '#94a3b8' }}>{g.conversions > 0 ? fmtMoneyShort(g.cost_per_conversion) : '—'}</td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={11} className="bg-violet-50/30 border-b border-violet-100 p-4">
+                              <div className="text-xs font-semibold text-slate-700 mb-2">📊 Evolución diaria — {g.ad_group_name}</div>
+                              <RowExpandChart timeSeries={buildTimeSeriesByValue(computed.datosGruposFiltered, 'ad_group_id', g.ad_group_id)} label={g.ad_group_name} />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1076,7 +1341,7 @@ function GoogleAdsTab({ adsData, currentClient }) {
         <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
           <div className="mb-4">
             <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><FileText className="w-4 h-4" style={{ color: GORUTY.primary }} /> Anuncios Individuales</h3>
-            <p className="text-xs text-slate-500">{computed.anuncios.length} anuncios · ordenados por impresiones</p>
+            <p className="text-xs text-slate-500">{computed.anuncios.length} anuncios · click en una fila para ver evolución diaria</p>
           </div>
           {computed.anuncios.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
@@ -1087,6 +1352,7 @@ function GoogleAdsTab({ adsData, currentClient }) {
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white z-10"><tr className="text-left text-slate-500 border-b border-violet-100">
+                  <th className="py-2 px-2 font-semibold w-6"></th>
                   <th className="py-2 px-3 font-semibold">Tipo</th>
                   <th className="py-2 px-3 font-semibold">Final URL</th>
                   <th className="py-2 px-3 font-semibold">Campaña</th>
@@ -1100,18 +1366,30 @@ function GoogleAdsTab({ adsData, currentClient }) {
                 <tbody>
                   {computed.anuncios.map((a, i) => {
                     const urlCorto = String(a.ad_final_urls || '—').replace(/^https?:\/\/[^/]+/, '').split('?')[0] || '/';
+                    const isExpanded = expandedRow?.table === 'ads' && expandedRow?.key === a.ad_id;
                     return (
-                      <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
-                        <td className="py-2 px-3"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{a.ad_type}</span></td>
-                        <td className="py-2 px-3 font-mono text-[11px] text-slate-700 truncate max-w-[200px]" title={a.ad_final_urls}>{urlCorto}</td>
-                        <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[180px]" title={a.campaign_name}>{a.campaign_name}</td>
-                        <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[160px]" title={a.ad_group_name}>{a.ad_group_name}</td>
-                        <td className="py-2 px-3 text-right text-slate-600">{fmt(a.impressions)}</td>
-                        <td className="py-2 px-3 text-right text-slate-600">{fmt(a.clicks)}</td>
-                        <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.primary }}>{fmtPct(a.ctr)}</td>
-                        <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(a.cost)}</td>
-                        <td className="py-2 px-3 text-right text-slate-700 font-semibold">{a.conversions.toFixed(2)}</td>
-                      </tr>
+                      <React.Fragment key={i}>
+                        <tr onClick={() => toggleRow('ads', a.ad_id)} className={`border-b border-violet-50 cursor-pointer transition ${isExpanded ? 'bg-violet-50' : 'hover:bg-violet-50/50'}`}>
+                          <td className="py-2 px-2 text-center">{isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-violet-500 inline" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 inline" />}</td>
+                          <td className="py-2 px-3"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{a.ad_type}</span></td>
+                          <td className="py-2 px-3 font-mono text-[11px] text-slate-700 truncate max-w-[200px]" title={a.ad_final_urls}>{urlCorto}</td>
+                          <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[180px]" title={a.campaign_name}>{a.campaign_name}</td>
+                          <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[160px]" title={a.ad_group_name}>{a.ad_group_name}</td>
+                          <td className="py-2 px-3 text-right text-slate-600">{fmt(a.impressions)}</td>
+                          <td className="py-2 px-3 text-right text-slate-600">{fmt(a.clicks)}</td>
+                          <td className="py-2 px-3 text-right font-semibold" style={{ color: GORUTY.primary }}>{fmtPct(a.ctr)}</td>
+                          <td className="py-2 px-3 text-right" style={{ color: GORUTY.warning }}>{fmtMoneyShort(a.cost)}</td>
+                          <td className="py-2 px-3 text-right text-slate-700 font-semibold">{a.conversions.toFixed(2)}</td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={10} className="bg-violet-50/30 border-b border-violet-100 p-4">
+                              <div className="text-xs font-semibold text-slate-700 mb-2">📊 Evolución diaria — Anuncio {a.ad_id} ({a.ad_type})</div>
+                              <RowExpandChart timeSeries={buildTimeSeriesByValue(computed.datosAnunciosFiltered, 'ad_id', a.ad_id)} label={String(a.ad_id)} />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -1895,14 +2173,14 @@ function Dashboard({ session, onLogout }) {
             <SectionHeader title="Paid Media" subtitle="Performance de campañas pagadas — Google Ads, Meta, LinkedIn" icon={Megaphone} sectionKey="paidMedia" badge={liveData?.googleAds?.disponible ? '📢 Ads' : '🔜 Pronto'} sections={sections} toggleSection={toggleSection} />
             {sections.paidMedia && (
               <div className="mb-6">
-                <PaidMediaSection liveData={liveData} currentClient={currentClient} />
+                <PaidMediaSection liveData={liveData} currentClient={currentClient} dateFilter={dateFilter} dateRange={dateRange} />
               </div>
             )}
 
             <SectionHeader title="SEO Orgánico" subtitle="Datos de Google Search Console — keywords, posiciones y oportunidades" icon={Globe} sectionKey="seo" badge={liveData?.seo?.disponible ? '🔍 GSC' : '🔜 Pronto'} sections={sections} toggleSection={toggleSection} />
             {sections.seo && (
               <div className="mb-6">
-                <SEOSection liveData={liveData} currentClient={currentClient} />
+                <SEOSection liveData={liveData} currentClient={currentClient} dateFilter={dateFilter} dateRange={dateRange} />
               </div>
             )}
 
