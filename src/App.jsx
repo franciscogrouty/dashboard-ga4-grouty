@@ -1725,6 +1725,253 @@ const Panel = ({ title, children, className = '' }) => (
   <div className={`bg-white border border-violet-100 rounded-xl p-5 shadow-sm ${className}`}><h3 className="text-sm font-semibold text-slate-800 mb-4">{title}</h3>{children}</div>
 );
 
+// 🆕 v9 — Sección Maestro de Actualización de Datos (solo admin)
+function MaestroActualizacionSection({ session }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [lastFetch, setLastFetch] = useState(null);
+
+  const fetchMaestro = async () => {
+    setLoading(true); setError(null);
+    try {
+      const url = `${API_URL}?action=maestroData&token=${encodeURIComponent(session.token)}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const json = await response.json();
+      if (json.error) throw new Error(json.error);
+      setData(json);
+      setLastFetch(new Date());
+    } catch (err) {
+      setError(err.message || 'Error al cargar el maestro');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchMaestro(); /* eslint-disable-next-line */ }, []);
+
+  // Identifica las columnas dinámicamente y clasifica
+  const stats = useMemo(() => {
+    if (!data?.filas || data.filas.length === 0) return null;
+    const filas = data.filas;
+    const headers = Object.keys(filas[0]);
+
+    // Detecta pares "fuente / Estado fuente" automáticamente
+    const fuentes = [];
+    headers.forEach(h => {
+      if (h.toLowerCase().startsWith('estado ')) {
+        const fuenteName = h.replace(/^estado\s+/i, '').trim();
+        const fuenteHeader = headers.find(x => x.toLowerCase() === fuenteName.toLowerCase());
+        if (fuenteHeader) fuentes.push({ nombre: fuenteName, fechaCol: fuenteHeader, estadoCol: h });
+      }
+    });
+
+    // Conteo de estados por fuente
+    const conteos = fuentes.map(f => {
+      const estados = { ok: 0, alerta: 0, sinData: 0, total: 0 };
+      filas.forEach(fila => {
+        const e = String(fila[f.estadoCol] || '').toLowerCase();
+        if (!e || e === '—' || e === '-') { /* sin fuente configurada */ return; }
+        estados.total++;
+        if (e.includes('ok') || e.includes('✅')) estados.ok++;
+        else if (e.includes('sin data') || e.includes('sin')) estados.sinData++;
+        else if (e.includes('⚠') || /\d+d/.test(e)) estados.alerta++;
+        else estados.alerta++;
+      });
+      return { ...f, ...estados };
+    });
+
+    // Total global
+    const totalFuentesConfiguradas = conteos.reduce((s, c) => s + c.total, 0);
+    const totalOK = conteos.reduce((s, c) => s + c.ok, 0);
+    const totalAlertas = conteos.reduce((s, c) => s + c.alerta, 0);
+    const totalSinData = conteos.reduce((s, c) => s + c.sinData, 0);
+
+    // Última revisión global
+    const ultimaRevisionCol = headers.find(h => h.toLowerCase().includes('última revisión') || h.toLowerCase().includes('ultima revision'));
+    let ultimaRevision = null;
+    if (ultimaRevisionCol) {
+      const fechas = filas.map(f => f[ultimaRevisionCol]).filter(Boolean).sort();
+      ultimaRevision = fechas[fechas.length - 1];
+    }
+
+    return { headers, fuentes, conteos, totalFuentesConfiguradas, totalOK, totalAlertas, totalSinData, ultimaRevision, totalClientes: filas.length };
+  }, [data]);
+
+  // Renderiza el badge de estado correctamente
+  const renderEstadoBadge = (valor) => {
+    const v = String(valor || '').trim();
+    if (!v || v === '—' || v === '-') return <span className="text-slate-300">—</span>;
+    const lower = v.toLowerCase();
+    if (lower.includes('ok')) {
+      return <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✅ OK</span>;
+    }
+    if (lower.includes('sin data')) {
+      return <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">⚠️ Sin data</span>;
+    }
+    if (/\d+d/.test(lower) || lower.includes('⚠')) {
+      return <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">⚠️ {v.replace(/⚠️?/g, '').trim()}</span>;
+    }
+    return <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">❌ {v}</span>;
+  };
+
+  const renderFecha = (valor) => {
+    const v = String(valor || '').trim();
+    if (!v || v === '—' || v === '-') return <span className="text-slate-300">—</span>;
+    return <span className="font-mono text-[11px] text-slate-700">{v}</span>;
+  };
+
+  if (loading && !data) {
+    return (
+      <div className="bg-white rounded-2xl p-12 border border-violet-100 shadow-sm text-center">
+        <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" style={{ color: GORUTY.primary }} />
+        <p className="text-sm text-slate-500">Cargando maestro de actualización...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <h3 className="text-sm font-bold text-rose-800 mb-1">Error al cargar el maestro</h3>
+          <p className="text-xs text-rose-700">{error}</p>
+          <button onClick={fetchMaestro} className="mt-3 px-3 py-1.5 rounded-lg text-xs bg-white border border-rose-300 text-rose-700 font-medium hover:bg-rose-100">Reintentar</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data?.disponible || !stats) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-sm text-amber-800">
+        Sin datos disponibles en el sheet maestro.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* TILES — resumen global */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-4 shadow-md">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20"><Building2 className="w-4 h-4 text-white" /></div>
+            <span className="text-xs font-medium text-white/90">Clientes monitoreados</span>
+          </div>
+          <div className="text-2xl font-bold text-white">{stats.totalClientes}</div>
+          <div className="text-[10px] text-white/80 mt-0.5">{stats.totalFuentesConfiguradas} fuentes activas</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-emerald-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-100"><Check className="w-4 h-4 text-emerald-600" /></div>
+            <span className="text-xs font-medium text-slate-500">Fuentes OK</span>
+          </div>
+          <div className="text-2xl font-bold text-emerald-700">{stats.totalOK}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">{stats.totalFuentesConfiguradas > 0 ? Math.round((stats.totalOK / stats.totalFuentesConfiguradas) * 100) : 0}% del total</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-amber-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100"><AlertTriangle className="w-4 h-4 text-amber-600" /></div>
+            <span className="text-xs font-medium text-slate-500">Fuentes con alerta</span>
+          </div>
+          <div className="text-2xl font-bold text-amber-700">{stats.totalAlertas + stats.totalSinData}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">{stats.totalAlertas} atrasadas · {stats.totalSinData} sin data</div>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-100"><Clock className="w-4 h-4" style={{ color: GORUTY.primary }} /></div>
+            <span className="text-xs font-medium text-slate-500">Última revisión</span>
+          </div>
+          <div className="text-base font-bold text-slate-800 leading-tight">{stats.ultimaRevision || '—'}</div>
+          {lastFetch && <div className="text-[10px] text-slate-400 mt-0.5">Cargado a las {lastFetch.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</div>}
+        </div>
+      </div>
+
+      {/* Tiles por fuente */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {stats.conteos.map((f, i) => {
+          const pct = f.total > 0 ? (f.ok / f.total) * 100 : 0;
+          const colorBar = pct >= 90 ? '#10b981' : (pct >= 70 ? '#f59e0b' : '#ef4444');
+          return (
+            <div key={i} className="bg-white rounded-2xl p-4 border border-violet-100 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-slate-600">{f.nombre}</div>
+                <span className="text-[10px] text-slate-400">{f.total} configuradas</span>
+              </div>
+              <div className="flex items-baseline gap-1.5 mb-2">
+                <div className="text-2xl font-bold text-slate-800">{f.ok}</div>
+                <div className="text-xs text-slate-500">/ {f.total} OK</div>
+              </div>
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-2">
+                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: colorBar }}></div>
+              </div>
+              <div className="flex items-center gap-3 text-[10px]">
+                <span className="text-emerald-600 font-semibold">✅ {f.ok}</span>
+                {f.alerta > 0 && <span className="text-amber-600 font-semibold">⚠️ {f.alerta}</span>}
+                {f.sinData > 0 && <span className="text-slate-500 font-semibold">⊘ {f.sinData}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tabla detalle */}
+      <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Activity className="w-4 h-4" style={{ color: GORUTY.primary }} /> Detalle por Cliente</h3>
+            <p className="text-xs text-slate-500">{stats.totalClientes} clientes · estado actual de cada fuente</p>
+          </div>
+          <button onClick={fetchMaestro} disabled={loading} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition text-white font-medium shadow-sm hover:shadow-md disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Cargando...' : 'Refrescar'}
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-slate-500 border-b border-violet-100">
+              {stats.headers.map((h, i) => {
+                const isEstado = h.toLowerCase().startsWith('estado ');
+                const isFecha = stats.fuentes.some(f => f.fechaCol === h);
+                const align = (isEstado || isFecha) ? 'text-center' : 'text-left';
+                return <th key={i} className={`py-2 px-3 font-semibold ${align}`}>{h}</th>;
+              })}
+            </tr></thead>
+            <tbody>
+              {data.filas.map((fila, i) => (
+                <tr key={i} className="border-b border-violet-50 hover:bg-violet-50/50">
+                  {stats.headers.map((h, j) => {
+                    const valor = fila[h];
+                    const isEstado = h.toLowerCase().startsWith('estado ');
+                    const isFecha = stats.fuentes.some(f => f.fechaCol === h);
+                    const isUltima = h.toLowerCase().includes('última') || h.toLowerCase().includes('ultima');
+                    if (j === 0) {
+                      return <td key={j} className="py-2.5 px-3 text-slate-800 font-semibold">{valor || '—'}</td>;
+                    }
+                    if (isEstado) {
+                      return <td key={j} className="py-2.5 px-3 text-center">{renderEstadoBadge(valor)}</td>;
+                    }
+                    if (isFecha) {
+                      return <td key={j} className="py-2.5 px-3 text-center">{renderFecha(valor)}</td>;
+                    }
+                    if (isUltima) {
+                      return <td key={j} className="py-2.5 px-3 text-slate-500 font-mono text-[11px]">{valor || '—'}</td>;
+                    }
+                    return <td key={j} className="py-2.5 px-3 text-slate-600">{valor}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ session, onLogout }) {
   const [dateRange, setDateRange] = useState('all');
   const [customStart, setCustomStart] = useState('2026-03-20');
@@ -1789,7 +2036,7 @@ function Dashboard({ session, onLogout }) {
   useEffect(() => { if (Object.keys(clientCache).length === 0) handleRefresh(); /* eslint-disable-next-line */ }, []);
 
   const [sections, setSections] = useState({
-    aiChat: false, funnel: false, seo: false, paidMedia: false,
+    aiChat: false, maestroData: false, funnel: false, seo: false, paidMedia: false,
     acquisition: false, audience: false, behavior: false, engagement: false, events: false, advanced: false,
   });
 
@@ -2109,6 +2356,13 @@ function Dashboard({ session, onLogout }) {
               <div className="mb-6">
                 <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
                 {sections.aiChat && (<AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} />)}
+              </div>
+            )}
+
+            {isAdmin && (
+              <div className="mb-6">
+                <SectionHeader title="Estado de Actualización de Datos" subtitle="Seguimiento maestro de fuentes (GA4, GSC, Google Ads) por cliente" icon={Activity} sectionKey="maestroData" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
+                {sections.maestroData && (<MaestroActualizacionSection session={session} />)}
               </div>
             )}
 
