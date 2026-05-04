@@ -1635,7 +1635,7 @@ INSTRUCCIONES:
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-lg flex-shrink-0" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}><MessageSquare className="w-5 h-5 text-white" /></div>
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">Pregunta a Claude<span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>💬 Chat</span><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🔒 Solo Admin</span></h3>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">Grouty Agent<span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>💬 Chat</span><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🔒 Solo Admin</span></h3>
             <p className="text-xs text-slate-500 mt-0.5">Conversa libremente sobre los datos de {currentClient?.emoji} {currentClient?.nombre} · {messages.length > 0 ? `${messages.length} mensajes` : 'Sin mensajes'}</p>
           </div>
         </div>
@@ -1646,7 +1646,7 @@ INSTRUCCIONES:
         {messages.length === 0 && !loading && (
           <div className="text-center py-8">
             <div className="flex justify-center mb-4"><div className="p-4 rounded-full" style={{ backgroundColor: `${GORUTY.primary}10` }}><MessageSquare className="w-8 h-8" style={{ color: GORUTY.primary }} /></div></div>
-            <p className="text-sm text-slate-700 font-semibold mb-2">¡Hola! Soy Claude 👋</p>
+            <p className="text-sm text-slate-700 font-semibold mb-2">¡Hola! Soy Grouty Agent 👋</p>
             <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">Tengo acceso a todos los datos GA4, SEO y Google Ads de <strong>{currentClient?.nombre}</strong>, incluyendo el detalle día por día y el funnel de conversión.</p>
             <p className="text-xs text-slate-400 mt-4">Escribe tu pregunta abajo para empezar</p>
           </div>
@@ -1671,7 +1671,7 @@ INSTRUCCIONES:
             <div className="flex-1">
               <div className="rounded-2xl rounded-tl-sm border border-violet-100 px-4 py-3 inline-flex items-center gap-2" style={{ backgroundColor: '#fafaff' }}>
                 <div className="flex gap-1"><div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '0ms' }}></div><div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '150ms' }}></div><div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: GORUTY.primary, animationDelay: '300ms' }}></div></div>
-                <span className="text-xs text-slate-500 ml-1">Claude está escribiendo...</span>
+                <span className="text-xs text-slate-500 ml-1">Grouty Agent está escribiendo...</span>
               </div>
             </div>
           </div>
@@ -1683,7 +1683,7 @@ INSTRUCCIONES:
       <div className="border-t border-violet-100 p-4 bg-white">
         <div className="flex gap-2 items-end">
           <div className="flex-1 relative">
-            <textarea ref={textareaRef} value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleKeyDown} placeholder={`Pregúntale a Claude sobre ${currentClient?.nombre}...`} rows={1} disabled={loading || !liveData} className="w-full bg-violet-50/50 border border-violet-200 rounded-xl px-4 py-3 pr-12 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800 resize-none disabled:opacity-50 disabled:cursor-not-allowed" style={{ minHeight: '48px', maxHeight: '150px' }} />
+            <textarea ref={textareaRef} value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleKeyDown} placeholder={`Pregúntale a Grouty Agent sobre ${currentClient?.nombre}...`} rows={1} disabled={loading || !liveData} className="w-full bg-violet-50/50 border border-violet-200 rounded-xl px-4 py-3 pr-12 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800 resize-none disabled:opacity-50 disabled:cursor-not-allowed" style={{ minHeight: '48px', maxHeight: '150px' }} />
             <div className="absolute bottom-2 right-3 text-[10px] text-slate-400">Enter ⏎ para enviar · Shift+Enter para nueva línea</div>
           </div>
           <button onClick={sendMessage} disabled={loading || !inputValue.trim() || !liveData} className="px-4 py-3 rounded-xl text-sm flex items-center gap-2 transition text-white font-medium shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}><Send className="w-4 h-4" /></button>
@@ -1726,7 +1726,7 @@ const Panel = ({ title, children, className = '' }) => (
 );
 
 // 🆕 v9 — Sección Maestro de Actualización de Datos (solo admin)
-function MaestroActualizacionSection({ session }) {
+function MaestroActualizacionSection({ session, refreshKey }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -1749,7 +1749,8 @@ function MaestroActualizacionSection({ session }) {
     }
   };
 
-  useEffect(() => { fetchMaestro(); /* eslint-disable-next-line */ }, []);
+  // 🆕 v10 — Carga inicial + refetch cuando cambia refreshKey (sincronizado con "Actualizar todos")
+  useEffect(() => { fetchMaestro(); /* eslint-disable-next-line */ }, [refreshKey]);
 
   // Identifica las columnas dinámicamente y clasifica
   const stats = useMemo(() => {
@@ -1854,81 +1855,19 @@ function MaestroActualizacionSection({ session }) {
 
   return (
     <div className="space-y-5">
-      {/* TILES — resumen global */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-4 shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20"><Building2 className="w-4 h-4 text-white" /></div>
-            <span className="text-xs font-medium text-white/90">Clientes monitoreados</span>
-          </div>
-          <div className="text-2xl font-bold text-white">{stats.totalClientes}</div>
-          <div className="text-[10px] text-white/80 mt-0.5">{stats.totalFuentesConfiguradas} fuentes activas</div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-emerald-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-100"><Check className="w-4 h-4 text-emerald-600" /></div>
-            <span className="text-xs font-medium text-slate-500">Fuentes OK</span>
-          </div>
-          <div className="text-2xl font-bold text-emerald-700">{stats.totalOK}</div>
-          <div className="text-[10px] text-slate-400 mt-0.5">{stats.totalFuentesConfiguradas > 0 ? Math.round((stats.totalOK / stats.totalFuentesConfiguradas) * 100) : 0}% del total</div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-amber-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100"><AlertTriangle className="w-4 h-4 text-amber-600" /></div>
-            <span className="text-xs font-medium text-slate-500">Fuentes con alerta</span>
-          </div>
-          <div className="text-2xl font-bold text-amber-700">{stats.totalAlertas + stats.totalSinData}</div>
-          <div className="text-[10px] text-slate-400 mt-0.5">{stats.totalAlertas} atrasadas · {stats.totalSinData} sin data</div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-violet-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-100"><Clock className="w-4 h-4" style={{ color: GORUTY.primary }} /></div>
-            <span className="text-xs font-medium text-slate-500">Última revisión</span>
-          </div>
-          <div className="text-base font-bold text-slate-800 leading-tight">{stats.ultimaRevision || '—'}</div>
-          {lastFetch && <div className="text-[10px] text-slate-400 mt-0.5">Cargado a las {lastFetch.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</div>}
-        </div>
-      </div>
-
-      {/* Tiles por fuente */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {stats.conteos.map((f, i) => {
-          const pct = f.total > 0 ? (f.ok / f.total) * 100 : 0;
-          const colorBar = pct >= 90 ? '#10b981' : (pct >= 70 ? '#f59e0b' : '#ef4444');
-          return (
-            <div key={i} className="bg-white rounded-2xl p-4 border border-violet-100 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-semibold text-slate-600">{f.nombre}</div>
-                <span className="text-[10px] text-slate-400">{f.total} configuradas</span>
-              </div>
-              <div className="flex items-baseline gap-1.5 mb-2">
-                <div className="text-2xl font-bold text-slate-800">{f.ok}</div>
-                <div className="text-xs text-slate-500">/ {f.total} OK</div>
-              </div>
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-2">
-                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: colorBar }}></div>
-              </div>
-              <div className="flex items-center gap-3 text-[10px]">
-                <span className="text-emerald-600 font-semibold">✅ {f.ok}</span>
-                {f.alerta > 0 && <span className="text-amber-600 font-semibold">⚠️ {f.alerta}</span>}
-                {f.sinData > 0 && <span className="text-slate-500 font-semibold">⊘ {f.sinData}</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* Tabla detalle */}
       <div className="bg-white rounded-2xl p-5 border border-violet-100 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <div>
             <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Activity className="w-4 h-4" style={{ color: GORUTY.primary }} /> Detalle por Cliente</h3>
             <p className="text-xs text-slate-500">{stats.totalClientes} clientes · estado actual de cada fuente</p>
           </div>
-          <button onClick={fetchMaestro} disabled={loading} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition text-white font-medium shadow-sm hover:shadow-md disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Cargando...' : 'Refrescar'}
-          </button>
+          {lastFetch && (
+            <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+              {loading && <RefreshCw className="w-3 h-3 animate-spin" style={{ color: GORUTY.primary }} />}
+              <span>Cargado: {lastFetch.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -2354,15 +2293,15 @@ function Dashboard({ session, onLogout }) {
 
             {isAdmin && (
               <div className="mb-6">
-                <SectionHeader title="Chat con Claude" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
-                {sections.aiChat && (<AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} />)}
+                <SectionHeader title="Estado de Actualización de Datos" subtitle="Seguimiento maestro de fuentes (GA4, GSC, Google Ads) por cliente" icon={Activity} sectionKey="maestroData" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
+                {sections.maestroData && (<MaestroActualizacionSection session={session} refreshKey={refreshKey} />)}
               </div>
             )}
 
             {isAdmin && (
               <div className="mb-6">
-                <SectionHeader title="Estado de Actualización de Datos" subtitle="Seguimiento maestro de fuentes (GA4, GSC, Google Ads) por cliente" icon={Activity} sectionKey="maestroData" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
-                {sections.maestroData && (<MaestroActualizacionSection session={session} />)}
+                <SectionHeader title="Grouty Agent" subtitle="Pregunta lo que quieras sobre los datos del cliente" icon={MessageSquare} sectionKey="aiChat" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
+                {sections.aiChat && (<AIChatPanel liveData={liveData} kpis={kpis} currentClient={currentClient} dateRange={dateRange} daysCount={daysCount} trendData={trendData} />)}
               </div>
             )}
 
