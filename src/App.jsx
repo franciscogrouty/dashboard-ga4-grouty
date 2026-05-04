@@ -542,7 +542,7 @@ function LoginScreen({ onLogin }) {
         <div className="bg-white border border-violet-100 rounded-2xl shadow-xl shadow-violet-100/50 overflow-hidden">
           <div className="p-8 text-center" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}10, ${GORUTY.tertiary}10)` }}>
             <div className="flex justify-center mb-4"><GorutyLogo size={64} /></div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-1">Dashboard Grouty</h1>
+            <h1 className="text-2xl font-bold text-slate-900 mb-1">Grouty Marketing Agent</h1>
             <p className="text-sm text-slate-500">Powered by Grouty</p>
           </div>
           <div className="p-8">
@@ -1729,7 +1729,7 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
     });
 
     body += `\n${'─'.repeat(50)}\n`;
-    body += `Enviado desde Dashboard Grouty\n`;
+    body += `Enviado desde Grouty Marketing Agent\n`;
 
     // Gmail/Outlook web aceptan URLs más largas que mailto: (≈8000 chars).
     // Solo truncamos si va por mailto: (cliente del sistema).
@@ -2407,7 +2407,7 @@ function Dashboard({ session, onLogout }) {
             <GorutyLogo size={52} />
             <div>
               <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                <h1 className="text-2xl font-bold text-slate-900">Dashboard Grouty</h1>
+                <h1 className="text-2xl font-bold text-slate-900">Grouty Marketing Agent</h1>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.tertiary})` }}>Grouty</span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{currentClient?.emoji} {currentClient?.nombre}</span>
                 {liveData && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">✓ Datos en vivo</span>}
@@ -2651,7 +2651,7 @@ function Dashboard({ session, onLogout }) {
 
             <div className="flex items-center justify-center gap-2 text-xs text-slate-400 pt-6 border-t border-violet-100">
               <GorutyLogo size={20} />
-              <span>Dashboard Grouty · {currentClient?.nombre} · Powered by Grouty · 🔐 Acceso autenticado</span>
+              <span>Grouty Marketing Agent · {currentClient?.nombre} · Powered by Grouty · 🔐 Acceso autenticado</span>
             </div>
           </>
         )}
