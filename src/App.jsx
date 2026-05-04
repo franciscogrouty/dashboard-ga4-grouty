@@ -5,7 +5,7 @@ import { TrendingUp, Users, Eye, Target, Clock, MousePointer, Globe, ChevronDown
 const API_URL = 'https://script.google.com/macros/s/AKfycbzGdRgh4p6iJtTvk_CPDUUkLrgfuo1k-RuTPc7VtVrlenEv58LTMAP07l-CxPpgcCqtVw/exec';
 
 const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY || '';
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL = 'claude-opus-4-7';
 
 const GORUTY = {
   primary: '#5b4bff',
