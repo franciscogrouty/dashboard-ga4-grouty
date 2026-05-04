@@ -1557,11 +1557,10 @@ function AIChatPanel({ liveData, kpis, currentClient, dateRange, daysCount, tren
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copiedIndex, setCopiedIndex] = useState(null);
-  // 🆕 v11 — Estado del modal de email
+  // 🆕 v12 — Estado del modal de email (mailto: abre cliente del usuario)
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState('');
-  const [emailSending, setEmailSending] = useState(false);
-  const [emailFeedback, setEmailFeedback] = useState(null);
+  const [emailError, setEmailError] = useState(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -1694,111 +1693,60 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
   const clearChat = () => { if (messages.length === 0 || window.confirm('¿Iniciar una nueva conversación?')) { setMessages([]); setError(''); } };
   const copyMessage = (text, idx) => { navigator.clipboard.writeText(text); setCopiedIndex(idx); setTimeout(() => setCopiedIndex(null), 2000); };
 
-  // 🆕 v11 — Convierte markdown básico a HTML inline-styled para email
-  const markdownToEmailHtml = (md) => {
+  // 🆕 v12 — Convierte markdown básico a texto plano legible (para mailto:)
+  const markdownToPlainText = (md) => {
     if (!md) return '';
-    let html = md
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#1e293b">$1</strong>');
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    html = html.replace(/`(.+?)`/g, '<code style="background:#f3f0ff;color:#5b4bff;padding:2px 6px;border-radius:4px;font-size:0.9em;font-family:Menlo,Monaco,monospace">$1</code>');
-    // Listas básicas
-    const lines = html.split('\n');
-    let out = []; let inList = false;
-    lines.forEach(line => {
-      const t = line.trim();
-      if (/^[-*]\s/.test(t)) {
-        if (!inList) { out.push('<ul style="margin:8px 0;padding-left:20px">'); inList = true; }
-        out.push(`<li style="margin:4px 0;color:#334155">${t.replace(/^[-*]\s/, '')}</li>`);
-      } else if (/^\d+\.\s/.test(t)) {
-        if (!inList) { out.push('<ol style="margin:8px 0;padding-left:20px">'); inList = true; }
-        out.push(`<li style="margin:4px 0;color:#334155">${t.replace(/^\d+\.\s/, '')}</li>`);
-      } else {
-        if (inList) { out.push('</ul>'); inList = false; }
-        if (t.startsWith('## ')) out.push(`<h3 style="color:#1e293b;font-size:16px;margin:16px 0 8px 0">${t.slice(3)}</h3>`);
-        else if (t.startsWith('# ')) out.push(`<h2 style="color:#1e293b;font-size:18px;margin:16px 0 8px 0">${t.slice(2)}</h2>`);
-        else if (t === '') out.push('');
-        else out.push(`<p style="margin:8px 0;color:#334155;line-height:1.5">${t}</p>`);
-      }
-    });
-    if (inList) out.push('</ul>');
-    return out.join('\n');
+    return md
+      .replace(/\*\*(.+?)\*\*/g, '$1')      // negritas
+      .replace(/\*(.+?)\*/g, '$1')          // cursivas
+      .replace(/`(.+?)`/g, '$1')            // código inline
+      .replace(/^##\s+/gm, '')              // headers H2
+      .replace(/^#\s+/gm, '');              // headers H1
   };
 
-  // 🆕 v11 — Construye el HTML completo del email con identidad Grouty
-  const buildEmailHtml = () => {
-    const fechaStr = new Date().toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' });
-    const conversacionHtml = messages.map((m, i) => {
-      const esUser = m.role === 'user';
-      const bg = esUser ? 'linear-gradient(135deg,#5b4bff,#4936e8)' : '#fafaff';
-      const textColor = esUser ? '#ffffff' : '#334155';
-      const border = esUser ? 'none' : '1px solid #ede9fe';
-      const align = esUser ? 'right' : 'left';
-      const label = esUser ? 'TÚ' : 'GROUTY AGENT';
-      const labelColor = esUser ? '#5b4bff' : '#7c6dff';
-      return `
-        <tr><td style="padding:8px 0">
-          <div style="font-size:10px;font-weight:700;color:${labelColor};text-transform:uppercase;letter-spacing:0.5px;text-align:${align};margin-bottom:4px">${label}</div>
-          <div style="background:${bg};color:${textColor};border:${border};border-radius:12px;padding:12px 16px;font-size:14px;line-height:1.5">
-            ${esUser ? m.content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>') : markdownToEmailHtml(m.content)}
-          </div>
-        </td></tr>`;
-    }).join('');
-
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conversación con Grouty Agent</title></head>
-<body style="margin:0;padding:0;background:#f9f7ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-  <table width="100%" cellspacing="0" cellpadding="0" style="background:#f9f7ff;padding:24px 0">
-    <tr><td align="center">
-      <table width="600" cellspacing="0" cellpadding="0" style="background:white;border-radius:16px;border:1px solid #ede9fe;overflow:hidden;max-width:600px">
-        <tr><td style="background:linear-gradient(135deg,#5b4bff,#7c6dff);padding:24px;color:white">
-          <div style="font-size:11px;font-weight:600;letter-spacing:1px;opacity:0.9;text-transform:uppercase">Grouty Dashboard</div>
-          <h1 style="margin:6px 0 4px 0;font-size:22px;font-weight:700">Conversación con Grouty Agent</h1>
-          <div style="font-size:13px;opacity:0.92">${currentClient?.emoji || ''} ${currentClient?.nombre || ''} · ${fechaStr}</div>
-        </td></tr>
-        <tr><td style="padding:20px 24px">
-          <table width="100%" cellspacing="0" cellpadding="0">${conversacionHtml}</table>
-        </td></tr>
-        <tr><td style="padding:16px 24px;background:#fafaff;border-top:1px solid #ede9fe;font-size:11px;color:#94a3b8;text-align:center">
-          Conversación enviada desde Dashboard Grouty · ${messages.length} mensajes
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
-  };
-
-  // 🆕 v11 — Envía la conversación por email vía Apps Script
-  const sendEmailNow = async () => {
+  // 🆕 v12 — Construye el cuerpo del email en texto plano y abre el cliente del usuario
+  const openMailClient = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const to = emailTo.trim();
-    if (!emailRegex.test(to)) { setEmailFeedback({ type: 'error', msg: 'Email inválido' }); return; }
-    if (messages.length === 0) { setEmailFeedback({ type: 'error', msg: 'No hay mensajes para enviar' }); return; }
+    if (!emailRegex.test(to)) { setEmailError('Email inválido'); return; }
+    if (messages.length === 0) { setEmailError('No hay mensajes para enviar'); return; }
 
-    setEmailSending(true); setEmailFeedback(null);
-    try {
-      const html = buildEmailHtml();
-      const subject = `Conversación Grouty Agent — ${currentClient?.nombre || 'Cliente'}`;
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'enviarEmail',
-          token: session.token,
-          to, subject, html,
-          cliente: currentClient?.id || ''
-        })
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (data.requiereLogin) throw new Error('Sesión expirada — vuelve a iniciar sesión');
-      if (!data.ok) throw new Error(data.error || 'Error desconocido');
-      setEmailFeedback({ type: 'success', msg: data.mensaje || 'Enviado correctamente' });
-      setTimeout(() => { setEmailModalOpen(false); setEmailFeedback(null); setEmailTo(''); }, 1800);
-    } catch (err) {
-      setEmailFeedback({ type: 'error', msg: err.message || 'Error al enviar' });
-    } finally {
-      setEmailSending(false);
+    const fechaStr = new Date().toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' });
+    const subject = `Conversación Grouty Agent — ${currentClient?.nombre || 'Cliente'}`;
+
+    let body = `CONVERSACIÓN CON GROUTY AGENT\n`;
+    body += `Cliente: ${currentClient?.nombre || ''}\n`;
+    body += `Fecha: ${fechaStr}\n`;
+    body += `Mensajes: ${messages.length}\n`;
+    body += `${'─'.repeat(50)}\n\n`;
+
+    messages.forEach((m, i) => {
+      const label = m.role === 'user' ? 'TÚ' : 'GROUTY AGENT';
+      const cleanContent = m.role === 'user' ? m.content : markdownToPlainText(m.content);
+      body += `▸ ${label}:\n${cleanContent}\n\n`;
+      if (i < messages.length - 1) body += `${'─'.repeat(50)}\n\n`;
+    });
+
+    body += `\n${'─'.repeat(50)}\n`;
+    body += `Enviado desde Dashboard Grouty\n`;
+
+    // mailto: tiene límite de tamaño en algunos clientes (~2000 chars en URL).
+    // Si el body es muy largo, advertimos y truncamos preservando el inicio.
+    const MAX_BODY = 1800;
+    let finalBody = body;
+    if (body.length > MAX_BODY) {
+      finalBody = body.slice(0, MAX_BODY) + '\n\n[... conversación truncada por longitud. Para conversaciones largas, copia manualmente el chat.]';
     }
+
+    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
+    window.location.href = mailtoUrl;
+
+    // Cerrar modal después de un breve delay para dar tiempo al cliente de email
+    setTimeout(() => {
+      setEmailModalOpen(false);
+      setEmailTo('');
+      setEmailError(null);
+    }, 600);
   };
 
   return (
@@ -1869,9 +1817,9 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
         </div>
       </div>
 
-      {/* 🆕 v11 — Modal de envío por email */}
+      {/* 🆕 v12 — Modal de envío por email (abre cliente del usuario vía mailto:) */}
       {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)' }} onClick={() => !emailSending && setEmailModalOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)' }} onClick={() => setEmailModalOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-violet-100" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}10, ${GORUTY.tertiary}10)` }}>
               <div className="flex items-center justify-between">
@@ -1882,33 +1830,34 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
                     <p className="text-xs text-slate-500">{messages.length} mensaje{messages.length !== 1 ? 's' : ''} · {currentClient?.nombre}</p>
                   </div>
                 </div>
-                <button onClick={() => !emailSending && setEmailModalOpen(false)} disabled={emailSending} className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-40"><X className="w-4 h-4 text-slate-500" /></button>
+                <button onClick={() => setEmailModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100"><X className="w-4 h-4 text-slate-500" /></button>
               </div>
             </div>
             <div className="p-5 space-y-4">
               <div>
                 <label className="text-xs text-slate-500 mb-1.5 block font-semibold uppercase tracking-wide">Destinatario</label>
-                <input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="ejemplo@empresa.cl" disabled={emailSending} autoFocus className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
+                <input type="email" value={emailTo} onChange={(e) => { setEmailTo(e.target.value); setEmailError(null); }} onKeyDown={(e) => { if (e.key === 'Enter') openMailClient(); }} placeholder="ejemplo@empresa.cl" autoFocus className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
               </div>
-              <div className="text-xs text-slate-500 bg-violet-50/50 border border-violet-100 rounded-lg p-3">
-                <strong className="text-slate-700">Vista previa del envío:</strong>
-                <ul className="mt-1.5 space-y-0.5 list-disc list-inside text-[11px]">
-                  <li>Asunto: <em>Conversación Grouty Agent — {currentClient?.nombre}</em></li>
-                  <li>Formato: HTML con identidad Grouty</li>
-                  <li>Enviado desde: cuenta del Apps Script</li>
+              <div className="text-xs text-slate-600 bg-violet-50/50 border border-violet-100 rounded-lg p-3">
+                <strong className="text-slate-800">¿Cómo funciona?</strong>
+                <ul className="mt-1.5 space-y-0.5 list-disc list-inside text-[11px] text-slate-600">
+                  <li>Se abrirá tu cliente de email (Gmail, Outlook, Mail)</li>
+                  <li>El correo saldrá <strong>desde tu cuenta personal</strong></li>
+                  <li>Solo tienes que apretar "Enviar" en tu correo</li>
+                  <li>Asunto y conversación ya estarán prellenados</li>
                 </ul>
               </div>
-              {emailFeedback && (
-                <div className={`text-xs px-3 py-2 rounded-lg flex items-center gap-2 ${emailFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
-                  {emailFeedback.type === 'success' ? <Check className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
-                  {emailFeedback.msg}
+              {emailError && (
+                <div className="text-xs px-3 py-2 rounded-lg flex items-center gap-2 bg-rose-50 text-rose-800 border border-rose-200">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {emailError}
                 </div>
               )}
             </div>
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button onClick={() => setEmailModalOpen(false)} disabled={emailSending} className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-white disabled:opacity-40">Cancelar</button>
-              <button onClick={sendEmailNow} disabled={emailSending || !emailTo.trim()} className="px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition text-white font-medium shadow-sm hover:shadow-md disabled:opacity-40" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
-                {emailSending ? (<><RefreshCw className="w-3.5 h-3.5 animate-spin" />Enviando...</>) : (<><Send className="w-3.5 h-3.5" />Enviar ahora</>)}
+              <button onClick={() => setEmailModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-white">Cancelar</button>
+              <button onClick={openMailClient} disabled={!emailTo.trim()} className="px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition text-white font-medium shadow-sm hover:shadow-md disabled:opacity-40" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
+                <Mail className="w-3.5 h-3.5" />Abrir email
               </button>
             </div>
           </div>
