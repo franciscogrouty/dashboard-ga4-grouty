@@ -1726,31 +1726,9 @@ const Panel = ({ title, children, className = '' }) => (
 );
 
 // 🆕 v9 — Sección Maestro de Actualización de Datos (solo admin)
-function MaestroActualizacionSection({ session, refreshKey }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [lastFetch, setLastFetch] = useState(null);
-
-  const fetchMaestro = async () => {
-    setLoading(true); setError(null);
-    try {
-      const url = `${API_URL}?action=maestroData&token=${encodeURIComponent(session.token)}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const json = await response.json();
-      if (json.error) throw new Error(json.error);
-      setData(json);
-      setLastFetch(new Date());
-    } catch (err) {
-      setError(err.message || 'Error al cargar el maestro');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 🆕 v10 — Carga inicial + refetch cuando cambia refreshKey (sincronizado con "Actualizar todos")
-  useEffect(() => { fetchMaestro(); /* eslint-disable-next-line */ }, [refreshKey]);
+// 🆕 v11 — Componente presentacional: recibe data/loading/error/lastFetch desde Dashboard
+// El fetch lo maneja el Dashboard (solo en mount inicial y al apretar "Actualizar todos")
+function MaestroActualizacionSection({ data, loading, error, lastFetch, onRetry }) {
 
   // Identifica las columnas dinámicamente y clasifica
   const stats = useMemo(() => {
@@ -1839,7 +1817,7 @@ function MaestroActualizacionSection({ session, refreshKey }) {
         <div className="flex-1">
           <h3 className="text-sm font-bold text-rose-800 mb-1">Error al cargar el maestro</h3>
           <p className="text-xs text-rose-700">{error}</p>
-          <button onClick={fetchMaestro} className="mt-3 px-3 py-1.5 rounded-lg text-xs bg-white border border-rose-300 text-rose-700 font-medium hover:bg-rose-100">Reintentar</button>
+          <button onClick={onRetry} className="mt-3 px-3 py-1.5 rounded-lg text-xs bg-white border border-rose-300 text-rose-700 font-medium hover:bg-rose-100">Reintentar</button>
         </div>
       </div>
     );
@@ -1930,6 +1908,30 @@ function Dashboard({ session, onLogout }) {
   const currentClient = session.clientes.find(c => c.id === activeClient) || session.clientes[0];
   const isAdmin = session.rol === 'admin';
 
+  // 🆕 v11 — State del Maestro de Actualización (vive en Dashboard, no se desmonta)
+  const [maestroData, setMaestroData] = useState(null);
+  const [maestroLoading, setMaestroLoading] = useState(false);
+  const [maestroError, setMaestroError] = useState(null);
+  const [maestroLastFetch, setMaestroLastFetch] = useState(null);
+
+  const fetchMaestro = async () => {
+    if (!isAdmin) return;
+    setMaestroLoading(true); setMaestroError(null);
+    try {
+      const url = `${API_URL}?action=maestroData&token=${encodeURIComponent(session.token)}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const json = await response.json();
+      if (json.error) throw new Error(json.error);
+      setMaestroData(json);
+      setMaestroLastFetch(new Date());
+    } catch (err) {
+      setMaestroError(err.message || 'Error al cargar el maestro');
+    } finally {
+      setMaestroLoading(false);
+    }
+  };
+
   const fetchClientData = async (clientId) => {
     const url = `${API_URL}?token=${encodeURIComponent(session.token)}&cliente=${clientId}`;
     const response = await fetch(url);
@@ -1965,6 +1967,8 @@ function Dashboard({ session, onLogout }) {
         else if (r.error) { const cliente = session.clientes.find(c => c.id === r.id); errores.push(`${cliente?.nombre}: ${r.error}`); }
       });
       setClientCache(newCache); setRefreshKey(k => k + 1);
+      // 🆕 v11 — Refrescar maestro junto con clientes (no esperamos su resultado para mostrar el resto)
+      if (isAdmin) fetchMaestro();
       if (errores.length === 0) { setRefreshSuccess(true); setTimeout(() => setRefreshSuccess(false), 4000); }
       else if (errores.length < clientesACargar.length) { setRefreshSuccess(true); setRefreshError(`Algunos errores: ${errores.join(' · ')}`); setTimeout(() => setRefreshSuccess(false), 4000); setTimeout(() => setRefreshError(null), 6000); }
       else { setRefreshError(`No se cargaron clientes: ${errores[0]}`); setTimeout(() => setRefreshError(null), 6000); }
@@ -2294,7 +2298,7 @@ function Dashboard({ session, onLogout }) {
             {isAdmin && (
               <div className="mb-6">
                 <SectionHeader title="Estado de Actualización de Datos" subtitle="Seguimiento maestro de fuentes (GA4, GSC, Google Ads) por cliente" icon={Activity} sectionKey="maestroData" badge="🔒 Admin" sections={sections} toggleSection={toggleSection} />
-                {sections.maestroData && (<MaestroActualizacionSection session={session} refreshKey={refreshKey} />)}
+                {sections.maestroData && (<MaestroActualizacionSection data={maestroData} loading={maestroLoading} error={maestroError} lastFetch={maestroLastFetch} onRetry={fetchMaestro} />)}
               </div>
             )}
 
