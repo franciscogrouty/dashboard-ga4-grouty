@@ -1705,7 +1705,8 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
   };
 
   // 🆕 v12 — Construye el cuerpo del email en texto plano y abre el cliente del usuario
-  const openMailClient = () => {
+  // 🆕 v13 — Acepta el provider: 'gmail', 'outlook' o 'system' (mailto:)
+  const openMailClient = (provider) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const to = emailTo.trim();
     if (!emailRegex.test(to)) { setEmailError('Email inválido'); return; }
@@ -1730,23 +1731,38 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
     body += `\n${'─'.repeat(50)}\n`;
     body += `Enviado desde Dashboard Grouty\n`;
 
-    // mailto: tiene límite de tamaño en algunos clientes (~2000 chars en URL).
-    // Si el body es muy largo, advertimos y truncamos preservando el inicio.
-    const MAX_BODY = 1800;
+    // Gmail/Outlook web aceptan URLs más largas que mailto: (≈8000 chars).
+    // Solo truncamos si va por mailto: (cliente del sistema).
+    const MAX_MAILTO = 1800;
     let finalBody = body;
-    if (body.length > MAX_BODY) {
-      finalBody = body.slice(0, MAX_BODY) + '\n\n[... conversación truncada por longitud. Para conversaciones largas, copia manualmente el chat.]';
+    if (provider === 'system' && body.length > MAX_MAILTO) {
+      finalBody = body.slice(0, MAX_MAILTO) + '\n\n[... conversación truncada por longitud. Para conversaciones largas, usa Gmail u Outlook.]';
     }
 
-    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
-    window.location.href = mailtoUrl;
+    let url;
+    if (provider === 'gmail') {
+      // Gmail web compose
+      url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
+    } else if (provider === 'outlook') {
+      // Outlook web compose
+      url = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
+    } else {
+      // 'system' — cliente de email default del sistema (Apple Mail, Thunderbird, etc.)
+      url = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
+    }
 
-    // Cerrar modal después de un breve delay para dar tiempo al cliente de email
+    if (provider === 'system') {
+      window.location.href = url;
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    // Cerrar modal después de un breve delay
     setTimeout(() => {
       setEmailModalOpen(false);
       setEmailTo('');
       setEmailError(null);
-    }, 600);
+    }, 400);
   };
 
   return (
@@ -1836,17 +1852,37 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
             <div className="p-5 space-y-4">
               <div>
                 <label className="text-xs text-slate-500 mb-1.5 block font-semibold uppercase tracking-wide">Destinatario</label>
-                <input type="email" value={emailTo} onChange={(e) => { setEmailTo(e.target.value); setEmailError(null); }} onKeyDown={(e) => { if (e.key === 'Enter') openMailClient(); }} placeholder="ejemplo@empresa.cl" autoFocus className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
+                <input type="email" value={emailTo} onChange={(e) => { setEmailTo(e.target.value); setEmailError(null); }} onKeyDown={(e) => { if (e.key === 'Enter' && emailTo.trim()) openMailClient('gmail'); }} placeholder="ejemplo@empresa.cl" autoFocus className="w-full bg-violet-50/50 border border-violet-200 rounded-lg px-3 py-2.5 text-sm focus:border-violet-500 focus:bg-white outline-none text-slate-800" />
               </div>
+
+              <div>
+                <label className="text-xs text-slate-500 mb-1.5 block font-semibold uppercase tracking-wide">¿Con qué correo enviar?</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => openMailClient('gmail')} disabled={!emailTo.trim()} className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border border-violet-200 bg-white hover:border-violet-400 hover:bg-violet-50 transition text-xs font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <span className="text-xl">📧</span>
+                    <span>Gmail</span>
+                  </button>
+                  <button onClick={() => openMailClient('outlook')} disabled={!emailTo.trim()} className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border border-violet-200 bg-white hover:border-violet-400 hover:bg-violet-50 transition text-xs font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <span className="text-xl">📨</span>
+                    <span>Outlook</span>
+                  </button>
+                  <button onClick={() => openMailClient('system')} disabled={!emailTo.trim()} className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border border-violet-200 bg-white hover:border-violet-400 hover:bg-violet-50 transition text-xs font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <span className="text-xl">💻</span>
+                    <span>Otro</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="text-xs text-slate-600 bg-violet-50/50 border border-violet-100 rounded-lg p-3">
                 <strong className="text-slate-800">¿Cómo funciona?</strong>
                 <ul className="mt-1.5 space-y-0.5 list-disc list-inside text-[11px] text-slate-600">
-                  <li>Se abrirá tu cliente de email (Gmail, Outlook, Mail)</li>
-                  <li>El correo saldrá <strong>desde tu cuenta personal</strong></li>
+                  <li><strong>Gmail / Outlook</strong>: abre la app web en una pestaña nueva</li>
+                  <li><strong>Otro</strong>: usa el cliente default del sistema (Apple Mail, Thunderbird)</li>
+                  <li>El correo se enviará <strong>desde tu cuenta personal</strong></li>
                   <li>Solo tienes que apretar "Enviar" en tu correo</li>
-                  <li>Asunto y conversación ya estarán prellenados</li>
                 </ul>
               </div>
+
               {emailError && (
                 <div className="text-xs px-3 py-2 rounded-lg flex items-center gap-2 bg-rose-50 text-rose-800 border border-rose-200">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -1855,10 +1891,7 @@ Recuerda: tu utilidad depende de tu CONFIABILIDAD. Es mejor decir "no sé" 10 ve
               )}
             </div>
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button onClick={() => setEmailModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-white">Cancelar</button>
-              <button onClick={openMailClient} disabled={!emailTo.trim()} className="px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition text-white font-medium shadow-sm hover:shadow-md disabled:opacity-40" style={{ background: `linear-gradient(135deg, ${GORUTY.primary}, ${GORUTY.accent})` }}>
-                <Mail className="w-3.5 h-3.5" />Abrir email
-              </button>
+              <button onClick={() => setEmailModalOpen(false)} className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-white">Cerrar</button>
             </div>
           </div>
         </div>
